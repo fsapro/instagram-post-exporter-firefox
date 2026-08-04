@@ -7,7 +7,8 @@
     "test": "node --test test/*.test.js",
     "lint": "web-ext lint --ignore-files=test/** --ignore-files=docs/**",
     "start": "web-ext run -s .",
-    "build": "web-ext build --overwrite-dest --ignore-files=test/** --ignore-files=docs/** --ignore-files=package.json --ignore-files=package-lock.json --ignore-files=README.md --ignore-files=.gitignore"
+    "build": "web-ext build --overwrite-dest --ignore-files=test/** --ignore-files=docs/** --ignore-files=package.json --ignore-files=package-lock.json --ignore-files=README.md --ignore-files=.gitignore",
+    "sign": "web-ext sign --channel=unlisted --ignore-files=test/** --ignore-files=docs/** --ignore-files=package.json --ignore-files=package-lock.json --ignore-files=README.md --ignore-files=.gitignore"
   },
   "devDependencies": {
     "web-ext": "^8.3.0"

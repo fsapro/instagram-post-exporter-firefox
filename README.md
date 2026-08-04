@@ -94,10 +94,39 @@ have:
   flow above instead (`about:debugging#/runtime/this-firefox` → *Load
   Temporary Add-on…*, selecting `manifest.json` directly, no build step or
   signing needed) — the only downside is it's removed on browser restart.
-- **Permanent install on regular release Firefox:** submit the built
-  package to [addons.mozilla.org](https://addons.mozilla.org) for Mozilla
-  to sign (self-distribution or public listing); out of scope for local
-  development/testing.
+- **Permanent install on regular release Firefox:** get the package signed
+  by Mozilla — see "Signing for permanent self-install" below.
+
+## Signing for permanent self-install (any Firefox, no dev flags)
+
+This gets you a `.xpi` that installs permanently via "Installer un module
+depuis un fichier…" on **any** Firefox — release included — with no
+`about:config` changes, because it's actually signed by Mozilla. It's the
+**unlisted/self-distribution** channel: Mozilla runs an automated
+security scan (usually a few minutes, no human review), but the add-on is
+never listed or searchable on addons.mozilla.org — only people you give
+the `.xpi` file to can install it.
+
+1. **Create/log into a Firefox Account** at
+   [addons.mozilla.org](https://addons.mozilla.org) if you don't have one.
+2. **Generate API credentials**: go to the
+   [Developer Hub API keys page](https://addons.mozilla.org/developers/addon/api/key/)
+   and generate a JWT issuer (`API key`) + `API secret`. Keep the secret
+   private — treat it like a password, don't commit it anywhere.
+3. **Sign and submit**:
+   ```bash
+   npm install
+   npm run sign -- --api-key=YOUR_JWT_ISSUER --api-secret=YOUR_JWT_SECRET
+   ```
+   This uploads the package for Mozilla's automated review and, once
+   approved, downloads the signed `.xpi` into `web-ext-artifacts/`.
+4. **Install it**: `about:addons` → gear icon → **"Installer un module
+   depuis un fichier…"** → select the signed `.xpi`. Installs permanently,
+   survives restarts, no signing workaround needed.
+
+To update later: bump `"version"` in `manifest.json` and `package.json`,
+then re-run `npm run sign -- ...` — each signed version needs a
+higher version number than the last.
 
 ## Usage
 
