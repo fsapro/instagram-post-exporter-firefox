@@ -12,17 +12,17 @@
       }
     }
   },
-  "permissions": ["activeTab"],
   "host_permissions": [
     "https://www.instagram.com/*",
+    "https://instagram.com/*",
     "https://*.cdninstagram.com/*",
     "https://*.fbcdn.net/*"
   ],
   "content_scripts": [
     {
       "matches": [
-        "https://www.instagram.com/p/*",
-        "https://www.instagram.com/reel/*"
+        "https://www.instagram.com/*",
+        "https://instagram.com/*"
       ],
       "js": [
         "src/zip.js",

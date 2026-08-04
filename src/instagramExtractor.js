@@ -55,20 +55,63 @@
     );
   }
 
+  const SRCSET_WHITESPACE = /[ \t\n\r\f]/;
+
+  /**
+   * Parses a `srcset` attribute value into [{ url, width }]. Splitting naively
+   * on `,` breaks on candidates whose URL itself contains a comma (most
+   * notably `data:` URIs, e.g. `data:image/gif;base64,AAAA... 640w`), so this
+   * walks the string the way the HTML spec does: a candidate's URL is the
+   * next whitespace-delimited token (commas inside it are just characters),
+   * then everything up to the next un-parenthesized comma is its descriptor.
+   */
+  function parseSrcset(srcset) {
+    const input = srcset.trim();
+    const len = input.length;
+    const candidates = [];
+    let pos = 0;
+
+    while (pos < len) {
+      while (pos < len && (SRCSET_WHITESPACE.test(input[pos]) || input[pos] === ',')) pos++;
+      if (pos >= len) break;
+
+      const urlStart = pos;
+      while (pos < len && !SRCSET_WHITESPACE.test(input[pos])) pos++;
+      let url = input.slice(urlStart, pos);
+
+      let descriptor = '';
+      if (url.endsWith(',')) {
+        url = url.replace(/,+$/, '');
+      } else {
+        while (pos < len && SRCSET_WHITESPACE.test(input[pos])) pos++;
+        const descStart = pos;
+        let parenDepth = 0;
+        while (pos < len) {
+          const c = input[pos];
+          if (c === '(') parenDepth++;
+          else if (c === ')') parenDepth--;
+          else if (c === ',' && parenDepth <= 0) break;
+          pos++;
+        }
+        descriptor = input.slice(descStart, pos).trim();
+        if (pos < len && input[pos] === ',') pos++;
+      }
+
+      if (url) {
+        const widthMatch = descriptor.match(/(\d+)w/);
+        const width = widthMatch ? parseInt(widthMatch[1], 10) : 0;
+        candidates.push({ url, width });
+      }
+    }
+
+    return candidates;
+  }
+
   /** Picks the highest-resolution URL from an <img>'s srcset (falls back to src). */
   function resolveBestImageSrc(img) {
     const srcset = img.getAttribute('srcset');
     if (srcset) {
-      const candidates = srcset
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter(Boolean)
-        .map((entry) => {
-          const parts = entry.split(/\s+/);
-          const url = parts[0];
-          const width = parseInt((parts[1] || '').replace('w', ''), 10) || 0;
-          return { url, width };
-        });
+      const candidates = parseSrcset(srcset);
       candidates.sort((a, b) => b.width - a.width);
       if (candidates.length && candidates[0].url) {
         return candidates[0].url;
@@ -171,6 +214,7 @@
     extractPostDate,
     resolveBestImageSrc,
     isLikelyContentImage,
+    parseSrcset,
   };
 
   global.IGExporter = global.IGExporter || {};

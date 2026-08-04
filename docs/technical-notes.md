@@ -58,7 +58,12 @@ rendered in the page the user has open:
 - **Images** — every `<img>` inside the post root, filtered to drop obvious
   avatars/icons (small fixed dimensions, `alt` text matching "profile
   picture"), deduplicated by resolved URL. When an image has a `srcset`,
-  the highest-width candidate is chosen.
+  the highest-width candidate is chosen. `parseSrcset()` walks the
+  attribute value token by token (URL = next whitespace-delimited run,
+  descriptor = up to the next un-parenthesized comma) rather than naively
+  splitting on `,` — a plain comma-split misparses any candidate URL that
+  itself contains a comma, such as a `data:` URI's `base64,` marker (see
+  `test/instagramExtractor.test.js`).
 - **Description** — tries, in order: the post's `<h1>` (if present and
   non-trivial), the first sufficiently long `<span>` text inside a `<ul><li>`
   block that isn't a like-count/timestamp, then the page's own
@@ -89,17 +94,24 @@ it is still a heuristic reading of a third-party page's markup, so:
 
 Instagram is a single-page app: navigating from one post to another (e.g.
 via the feed, or the "next" arrow) uses `history.pushState`/`replaceState`
-and does not reload the page, so the content script itself does not re-run.
-`content.js` therefore:
+and does not reload the page, so a content script matched only against
+`/p/*`/`/reel/*` would never even get injected in the first place when a
+user clicks into a post from the feed (browsers inject `content_scripts`
+on document navigation, not on `pushState`). To avoid that cold-start gap,
+`manifest.json`'s `content_scripts.matches` covers the whole
+`instagram.com` origin, and `content.js` gates the button itself:
 
-1. Wraps `history.pushState`/`replaceState` to detect path changes.
-2. Also listens for `popstate` (back/forward navigation).
-3. Polls `location.pathname` every second as a low-cost fallback, in case
-   Instagram's router bypasses both of the above in some flow.
+1. `isSupportedPath()` checks `location.pathname` against `/p/*`/`/reel/*`
+   and `ensureButton()`/`removeButton()` add or remove the button
+   accordingly — this runs once on script load, and again on every detected
+   navigation.
+2. `history.pushState`/`replaceState` are wrapped to detect path changes.
+3. A `popstate` listener handles back/forward navigation.
+4. `location.pathname` is also polled every second as a low-cost fallback,
+   in case Instagram's router bypasses both of the above in some flow.
 
-On any detected path change, the button is added (if the new path matches
-`/p/*` or `/reel/*`) or removed (otherwise). The button element itself is
-keyed by a fixed `id`, so re-running the check is idempotent.
+The button element is keyed by a fixed `id`, so re-running the check is
+idempotent.
 
 ## Image fetching and permissions
 
@@ -108,15 +120,19 @@ page itself, **except** for origins covered by the extension's
 `host_permissions` — for those, the browser grants the extension
 cross-origin fetch access without needing the target server to send
 CORS headers. Instagram serves post images from CDN domains distinct from
-`www.instagram.com` (typically `*.cdninstagram.com` / `*.fbcdn.net`), so
-`manifest.json` declares `host_permissions` for exactly those three patterns
-— nothing broader (no `<all_urls>`). Image fetches are made with
-`credentials: 'omit'` since the CDN URLs are pre-signed and don't need
-cookies, and there's no reason to send the user's Instagram session cookie
-to a third-party CDN request.
+`instagram.com` (typically `*.cdninstagram.com` / `*.fbcdn.net`), so
+`manifest.json` declares `host_permissions` for the `www.instagram.com` and
+bare `instagram.com` origins plus those two CDN wildcard patterns — nothing
+broader (no `<all_urls>`). Image fetches are made with `credentials: 'omit'`
+since the CDN URLs are pre-signed and don't need cookies, and there's no
+reason to send the user's Instagram session cookie to a third-party CDN
+request.
 
-Only `activeTab` plus those three host permissions are requested — no
-`downloads`, `tabs`, `webRequest`, or other broad permissions.
+Only those four `host_permissions` patterns are requested. No `permissions`
+entries are needed at all — the extension never calls `browser.downloads`,
+`browser.tabs`, or any other privileged WebExtension API; the content
+script is injected purely via `content_scripts.matches`, and the file save
+uses plain DOM APIs (see below).
 
 ## Triggering the download without a background script
 
