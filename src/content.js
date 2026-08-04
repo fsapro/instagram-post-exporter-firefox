@@ -94,15 +94,16 @@
     return btoa(binary);
   }
 
-  /** Base64-encodes a JS string via its UTF-8 bytes (plain btoa() rejects non-Latin1 characters, e.g. emoji/accents). */
-  function stringToBase64Utf8(str) {
-    return bytesToBase64(new TextEncoder().encode(str));
-  }
-
-  /** Sends a fully-built file to the background script to save via browser.downloads. */
+  /**
+   * Sends a fully-built file to the background script to save via
+   * browser.downloads. The text is sent as-is (structured clone handles
+   * any Unicode content natively) rather than as a data: URL — Firefox's
+   * downloads.download() rejects data: URLs when called from a background
+   * script, so the background script builds a Blob + object URL itself
+   * (see background.js).
+   */
   async function saveFileDirect(filename, textContent) {
-    const dataUrl = `data:text/markdown;charset=utf-8;base64,${stringToBase64Utf8(textContent)}`;
-    await browser.runtime.sendMessage({ type: 'ig-exporter-save-file', filename, dataUrl });
+    await browser.runtime.sendMessage({ type: 'ig-exporter-save-file', filename, textContent });
   }
 
   async function exportAsZip({ markdown, zip, download }, images, common) {

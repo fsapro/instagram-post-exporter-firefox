@@ -252,12 +252,9 @@ reads that setting on each click and branches:
   `String.fromCharCode.apply` to avoid a call-stack overflow spreading a
   large `Uint8Array` at once), and inlined directly into the Markdown via
   `markdown.js`'s `images` parameter as `![alt](data:image/jpeg;base64,...)`
-  — one self-contained `.md` file, no separate image files. The whole
-  Markdown *text* (which may contain non-Latin1 characters — accents,
-  emoji, in the caption) is then itself base64-encoded through
-  `TextEncoder` first (`stringToBase64Utf8()`; plain `btoa()` throws on
-  anything outside Latin1) to build a `data:text/markdown;base64,...` URL,
-  sent to the background script.
+  — one self-contained `.md` file, no separate image files. The finished
+  Markdown text (a plain JS string — no `data:` URL, no base64, see below
+  for why) is sent to the background script.
 
 ### Why a background script only for this one mode
 
@@ -266,11 +263,25 @@ extension pages/background scripts do), and `browser.downloads.download()`
 is the only way to write a file to a *chosen subfolder* without a
 "Save As" dialog popping up on every single export. `src/background.js`
 is therefore the smallest possible addition: one `runtime.onMessage`
-listener that takes an already-fully-built `{ filename, dataUrl }` and
-calls `downloads.download({ url: dataUrl, filename, saveAs: false,
-conflictAction: 'uniquify' })` — it never reads, decides, or transforms
-anything about what gets saved; `content.js` does all of that before
-sending the message.
+listener that takes an already-fully-built `{ filename, textContent }` and
+saves it — it never reads, decides, or transforms the file's content
+itself; `content.js` does all of that before sending the message.
+
+**The file is sent as a plain string, not a `data:` URL.** The first
+version of this feature built a `data:text/markdown;base64,...` URL in
+`content.js` and passed it straight to `downloads.download({ url })` from
+the background script — Firefox rejected it every time with `Access denied
+for URL data:...`, regardless of size (a known Firefox restriction:
+`downloads.download()` called from a background script won't accept
+`data:` URLs at all). The fix is Mozilla's own recommended pattern: build a
+`Blob` + `URL.createObjectURL(blob)` **in the same context that calls
+`downloads.download()`** — Firefox's classic (non-service-worker)
+background script has a full page-like global (`Blob`/`URL`/`document` are
+all available there, unlike Chrome's DOM-less MV3 service workers), so
+`background.js` constructs the Blob itself from the plain text it
+receives, rather than content.js pre-encoding everything into a `data:`
+URL and shipping that across. The object URL is revoked ~30s after the
+download call resolves, giving the download time to actually read it.
 
 ### Why not a real folder picker
 
