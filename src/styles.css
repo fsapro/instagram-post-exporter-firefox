@@ -41,3 +41,15 @@
 .ig-exporter-btn--error {
   background: #d32f2f;
 }
+
+/* Applied when a save/bookmark icon was found on the page: the button is
+   anchored (via inline top/left set from content.js) just to its left
+   instead of floating in the bottom-right corner, and shrinks to fit
+   comfortably next to the other post action icons. */
+.ig-exporter-btn--anchored {
+  bottom: auto;
+  right: auto;
+  padding: 6px 12px;
+  font-size: 12px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}

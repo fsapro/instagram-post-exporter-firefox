@@ -222,6 +222,54 @@
     return time ? time.getAttribute('datetime') : null;
   }
 
+  const SAVE_ICON_ARIA_LABELS = ['enregistrer', 'save', 'guardar', 'salvar', 'speichern', 'salva'];
+
+  /**
+   * Finds a clickable ancestor for the post's save/bookmark icon, used only
+   * to read its on-screen position (`getBoundingClientRect`) so our own
+   * button can be placed next to it — it is never clicked or otherwise
+   * interacted with. Instagram's UI language (icon aria-labels) doesn't
+   * always match the post's own language, so this first tries a small set
+   * of known "save" labels, then falls back to the last icon in the
+   * like/comment/share/save row (save is conventionally the rightmost one).
+   */
+  function findSaveButtonAnchor(doc, root) {
+    const scope = root || findPostRoot(doc);
+    const icons = Array.from(scope.querySelectorAll('svg[aria-label]'));
+    if (!icons.length) return null;
+
+    let match = icons.find((svg) => {
+      const label = (svg.getAttribute('aria-label') || '').trim().toLowerCase();
+      return SAVE_ICON_ARIA_LABELS.includes(label);
+    });
+    if (!match) {
+      match = icons[icons.length - 1];
+    }
+    return match.closest('div[role="button"], button') || match;
+  }
+
+  /**
+   * True if an <article> element looks like an actual post/reel card rather
+   * than some other widget Instagram happens to also wrap in <article>
+   * (suggested-accounts rails, etc.). Requires at least one image plus a
+   * like/comment/share/save-style icon row (3+ labeled icons) — a real post
+   * card always has both; small sidebar widgets generally don't.
+   */
+  function looksLikePostArticle(article) {
+    if (!article.querySelector('img')) return false;
+    return article.querySelectorAll('svg[aria-label]').length >= 3;
+  }
+
+  /**
+   * Finds the post/reel permalink (e.g. "/p/<shortcode>/") inside a feed
+   * post card, if present — feed cards link to their own permalink (often
+   * via the timestamp) even though the address bar stays on the feed URL.
+   */
+  function findPostPermalink(article) {
+    const a = article.querySelector('a[href*="/p/"], a[href*="/reel/"]');
+    return a ? a.getAttribute('href') : null;
+  }
+
   const api = {
     extractShortcode,
     extractType,
@@ -232,6 +280,9 @@
     resolveBestImageSrc,
     isLikelyContentImage,
     parseSrcset,
+    findSaveButtonAnchor,
+    looksLikePostArticle,
+    findPostPermalink,
   };
 
   global.IGExporter = global.IGExporter || {};

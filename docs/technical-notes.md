@@ -51,10 +51,14 @@ out ("pas de scraping massif", "pas de contournement anti-bot / rate limit").
 Instead, `instagramExtractor.js` only reads elements that are already
 rendered in the page the user has open:
 
-- **Shortcode/type** — parsed from `location.href`/`location.pathname`
-  (`/p/<code>/` or `/reel/<code>/`).
-- **Post root** — `main article`, falling back through a few structural
-  selectors down to `document.body`.
+- **Shortcode/type** — parsed from the post's own URL: either an in-card
+  permalink (`findPostPermalink()`, feed cards) or `location.href` (direct
+  post pages).
+- **Post root** — for feed/multi-post scanning, the `<article>` element
+  itself is passed directly as the extraction root (see "Multi-post
+  scanning" below). `findPostRoot()` (`main article`, falling back through
+  a few structural selectors down to `document.body`) exists as a
+  single-post fallback used by `test/fixture.html`'s manual test harness.
 - **Images** — every `<img>` inside the post root, filtered to drop obvious
   avatars/icons (small fixed dimensions, `alt` text matching "profile
   picture"), deduplicated by resolved URL. When an image has a `srcset`,
@@ -101,29 +105,71 @@ it is still a heuristic reading of a third-party page's markup, so:
   text block on unusual layouts (e.g. a pinned comment) rather than the
   actual caption. The `og:description` meta fallback is the most stable
   signal when the structural heuristics fail.
+- `findSaveButtonAnchor()` (used purely to position the button, never
+  clicked) matches an icon's `aria-label` against a small list of known
+  translations for "save" (`enregistrer`, `save`, `guardar`, `salvar`,
+  `speichern`, `salva`) since Instagram's UI language doesn't always match
+  the post's own content language; if none match, it falls back to the
+  last `svg[aria-label]` in the post (save/bookmark is conventionally the
+  rightmost icon in the action row). In an unlisted UI language with an
+  unusual icon order, this can anchor to the wrong icon.
+- `looksLikePostArticle()` (an image + 3 or more labeled icons) is a
+  coarse filter to distinguish real post cards from other `<article>`-
+  wrapped widgets Instagram may render (e.g. suggested-accounts rails). A
+  post rendered with fewer than 3 icons in some alternate layout would be
+  skipped entirely.
 
-## SPA navigation handling
+## Multi-post scanning: one button per post card
 
-Instagram is a single-page app: navigating from one post to another (e.g.
-via the feed, or the "next" arrow) uses `history.pushState`/`replaceState`
-and does not reload the page, so a content script matched only against
-`/p/*`/`/reel/*` would never even get injected in the first place when a
-user clicks into a post from the feed (browsers inject `content_scripts`
-on document navigation, not on `pushState`). To avoid that cold-start gap,
-`manifest.json`'s `content_scripts.matches` covers the whole
-`instagram.com` origin, and `content.js` gates the button itself:
+The extension doesn't gate on the page URL at all — `manifest.json`'s
+`content_scripts.matches` covers the whole `instagram.com` origin, and
+`content.js` continuously scans the DOM for `<article>` elements that look
+like real post/reel cards (`extractor.looksLikePostArticle()`: has an
+`<img>` and a 3+ icon action row), giving each one its own button. This
+covers a direct `/p/`/`/reel/` page (exactly one matching article) and the
+home feed / a profile's tagged or saved view / explore (potentially many,
+loaded incrementally as the user scrolls) with the same code path — there's
+no special-casing of "am I on a post page."
 
-1. `isSupportedPath()` checks `location.pathname` against `/p/*`/`/reel/*`
-   and `ensureButton()`/`removeButton()` add or remove the button
-   accordingly — this runs once on script load, and again on every detected
-   navigation.
-2. `history.pushState`/`replaceState` are wrapped to detect path changes.
-3. A `popstate` listener handles back/forward navigation.
-4. `location.pathname` is also polled every second as a low-cost fallback,
-   in case Instagram's router bypasses both of the above in some flow.
+- `scanForPosts()` finds not-yet-seen articles (tagged with a
+  `data-ig-exporter-processed` attribute once handled), creates a button
+  for each, and drops buttons whose article has since left the DOM (e.g. a
+  virtualized feed item Instagram unmounted after scrolling far past it).
+- Each button is a direct child of `document.body`, not of the article —
+  this keeps it outside Instagram's own React tree (so a re-render of the
+  post card can't wipe it out) and immune to any CSS `transform` on
+  ancestor elements, which would otherwise change what a `position: fixed`
+  child is positioned relative to.
+- `repositionButtonFor()` anchors each button next to its own post's
+  save/bookmark icon (`extractor.findSaveButtonAnchor()`) using
+  `getBoundingClientRect()`, and hides it (rather than falling back to some
+  default position) whenever the anchor can't be found, isn't laid out yet,
+  or has scrolled off-screen — with potentially many post cards on screen
+  at once, a shared fallback position would just stack buttons on top of
+  each other.
+- Since Instagram keeps streaming in new cards and reflowing existing ones
+  without a page reload, there's no one-time scan: a 1s poll re-scans for
+  new articles and re-anchors every button, a `scroll` listener (capture
+  phase, so it also catches nested scroll containers like the feed's own
+  scroller or a post modal, since scroll events don't bubble) and a
+  `resize` listener additionally trigger a `requestAnimationFrame`-throttled
+  reposition pass for responsiveness during active scrolling.
+- Clicking a button reads that specific `<article>` as the extraction root
+  directly (`extractPostImages(document, article)`, etc.) — no need to
+  locate "the current post" globally, since each button already knows which
+  article it belongs to (closed over in its click handler).
+- The post's own URL/shortcode/type come from a permalink link inside the
+  card itself (`extractor.findPostPermalink()` — feed cards link to their
+  own `/p/`/`/reel/` URL, typically via the timestamp, even though the
+  address bar stays on the feed URL) with a fallback to `location.href` for
+  the case where the card has no such in-card link (typically because the
+  address bar already *is* the permalink, i.e. a direct post page).
 
-The button element is keyed by a fixed `id`, so re-running the check is
-idempotent.
+This replaces an earlier design that tracked a single global button gated
+on `location.pathname` plus `history.pushState`/`replaceState` patching —
+dropped once buttons became per-post-card rather than per-page, since path
+tracking no longer has anything to do with whether/where a button should
+exist.
 
 ## Image fetching and permissions
 
@@ -164,13 +210,24 @@ avoid interrupting an in-progress save.
 - `test/markdown.test.js` (Node, `node:test`): validates `post.md` content
   generation, including the "missing description"/"zero images" fallback
   text.
-- `test/fixture.html`: a static page with a hand-built, IG-like DOM
-  (article, two content images as inline data URIs, one avatar image to be
-  filtered out, a caption `<h1>`, a `<time datetime>` element, and an
-  `og:description` meta fallback). Opening it in Firefox and clicking "Run
-  export test" exercises `instagramExtractor.js`, `markdown.js`, `zip.js`,
-  and `download.js` together, end-to-end, entirely offline — validating the
-  full pipeline without ever contacting instagram.com.
+- `test/instagramExtractor.test.js` (Node, `node:test`): unit tests for the
+  pure DOM-reading helpers (`extractShortcode`/`extractType`, `parseSrcset`,
+  `resolveBestImageSrc`, `isLikelyContentImage`, `findSaveButtonAnchor`,
+  `looksLikePostArticle`, `findPostPermalink`) against minimal hand-built
+  fake DOM objects (just enough `getAttribute`/`querySelector(All)`/
+  `closest` stand-ins for each function under test) — no real DOM or jsdom
+  dependency needed.
+- `test/fixture.html`: a static page with a hand-built, IG-like DOM (a
+  3-slide carousel including a lazy-loaded slide, a caption `<h1>`, a
+  simulated like/comment/share/save action row, a `<time datetime>`
+  element, and an `og:description` meta fallback). Opening it in Firefox:
+  "Run export test" exercises `instagramExtractor.js`, `markdown.js`,
+  `zip.js`, and `download.js` together end-to-end, entirely offline;
+  "Preview anchored button position" exercises the same button-positioning
+  math `content.js` uses against the fixture's action row. Neither ever
+  contacts instagram.com. (`content.js` itself isn't loaded by the fixture,
+  since its multi-post scanning is easiest to verify live in a real
+  browser — see "Real-Instagram verification" below.)
 - `npx web-ext lint` validates `manifest.json` and flags common WebExtension
   packaging issues.
 

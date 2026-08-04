@@ -4,12 +4,46 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
-const { extractShortcode, extractType, parseSrcset, resolveBestImageSrc, isLikelyContentImage } =
-  require(path.join('..', 'src', 'instagramExtractor.js'));
+const {
+  extractShortcode,
+  extractType,
+  parseSrcset,
+  resolveBestImageSrc,
+  isLikelyContentImage,
+  findSaveButtonAnchor,
+  looksLikePostArticle,
+  findPostPermalink,
+} = require(path.join('..', 'src', 'instagramExtractor.js'));
 
 /** Minimal fake <img> — resolveBestImageSrc/isLikelyContentImage only ever call getAttribute(). */
 function fakeImg(attrs) {
   return { getAttribute: (name) => (Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null) };
+}
+
+/** Minimal fake <svg aria-label>, with a fixed .closest() result — enough for findSaveButtonAnchor. */
+function fakeSvg(label, closestResult) {
+  return {
+    getAttribute: (name) => (name === 'aria-label' ? label : null),
+    closest: () => closestResult,
+  };
+}
+
+function fakeScope(svgs) {
+  return { querySelectorAll: (selector) => (selector === 'svg[aria-label]' ? svgs : []) };
+}
+
+/** Minimal fake <article> — looksLikePostArticle/findPostPermalink only ever call querySelector(All). */
+function fakeArticle({ hasImg = false, iconCount = 0, permalinkHref = null } = {}) {
+  return {
+    querySelector: (selector) => {
+      if (selector === 'img') return hasImg ? {} : null;
+      if (selector === 'a[href*="/p/"], a[href*="/reel/"]') {
+        return permalinkHref ? { getAttribute: (n) => (n === 'href' ? permalinkHref : null) } : null;
+      }
+      return null;
+    },
+    querySelectorAll: (selector) => (selector === 'svg[aria-label]' ? new Array(iconCount).fill({}) : []),
+  };
 }
 
 test('extractShortcode parses /p/ and /reel/ URLs and bare paths', () => {
@@ -96,4 +130,41 @@ test('isLikelyContentImage rejects small avatar-sized images and profile-picture
     ),
     false
   );
+});
+
+test('findSaveButtonAnchor matches a known localized "save" label over other icons', () => {
+  const saveAnchor = { id: 'save-anchor' };
+  const scope = fakeScope([
+    fakeSvg('Like', { id: 'like-anchor' }),
+    fakeSvg('Comment', { id: 'comment-anchor' }),
+    fakeSvg('Enregistrer', saveAnchor),
+  ]);
+  assert.equal(findSaveButtonAnchor(null, scope), saveAnchor);
+});
+
+test('findSaveButtonAnchor falls back to the last icon when no known save label matches', () => {
+  const lastAnchor = { id: 'last-anchor' };
+  const scope = fakeScope([fakeSvg('Like', { id: 'like-anchor' }), fakeSvg('Unknown Icon', lastAnchor)]);
+  assert.equal(findSaveButtonAnchor(null, scope), lastAnchor);
+});
+
+test('findSaveButtonAnchor returns null when the post has no labeled icons', () => {
+  assert.equal(findSaveButtonAnchor(null, fakeScope([])), null);
+});
+
+test('looksLikePostArticle accepts a card with an image and a 3+ icon action row', () => {
+  assert.equal(looksLikePostArticle(fakeArticle({ hasImg: true, iconCount: 4 })), true);
+});
+
+test('looksLikePostArticle rejects cards missing an image or with too few icons (e.g. sidebar widgets)', () => {
+  assert.equal(looksLikePostArticle(fakeArticle({ hasImg: false, iconCount: 4 })), false);
+  assert.equal(looksLikePostArticle(fakeArticle({ hasImg: true, iconCount: 1 })), false);
+});
+
+test('findPostPermalink reads the feed card\'s own /p//reel/ link when present', () => {
+  assert.equal(
+    findPostPermalink(fakeArticle({ permalinkHref: '/p/ABC123/' })),
+    '/p/ABC123/'
+  );
+  assert.equal(findPostPermalink(fakeArticle({})), null);
 });

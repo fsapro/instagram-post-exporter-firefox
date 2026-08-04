@@ -1,8 +1,10 @@
 # Instagram Post Exporter (Firefox)
 
-A small, local-only Firefox WebExtension. On an Instagram post (`/p/...`) or
-reel (`/reel/...`) page, it adds an **"Export ZIP"** button. Clicking it saves
-the currently open post to your computer as a ZIP file containing:
+A small, local-only Firefox WebExtension. It adds an **"Export ZIP"** button
+next to every post/reel's save (bookmark) icon it can find — on a direct
+post page (`/p/...`, `/reel/...`), *and* on the home feed, a profile grid,
+saved posts, etc., one button per post card as you scroll. Clicking a
+button saves that specific post to your computer as a ZIP file containing:
 
 ```
 instagram-post-<shortcode>.zip
@@ -19,9 +21,11 @@ date, and the visible description/caption.
 
 - **Local browser only.** Everything runs in your browser tab. There is no
   companion server, no analytics, no telemetry.
-- **No scraping.** The extension only reads the DOM of the single post/reel
-  page you already have open — it never visits other pages, other posts, or
-  paginates through anything.
+- **No scraping.** The extension only reads the DOM of posts already
+  rendered on the page you have open (whether that's one post's own page or
+  several post cards loaded in your feed as you scroll) — it never visits
+  other pages, fetches additional posts, or paginates through anything
+  itself.
 - **No Instagram automation.** It never logs in, clicks, scrolls, or
   interacts with Instagram on your behalf. The only action is reading the
   page you opened and, when you click the button, fetching the exact image
@@ -86,11 +90,21 @@ have:
 
 ## Usage
 
-1. Navigate to any Instagram post (`https://www.instagram.com/p/<shortcode>/`)
-   or reel (`https://www.instagram.com/reel/<shortcode>/`).
-2. A pink/purple **"Export ZIP"** button appears in the bottom-right corner.
-3. Click it. The button shows "Exporting…" while it fetches the visible
-   images, then your browser downloads `instagram-<post|reel>-<shortcode>.zip`.
+1. Browse Instagram normally — the home feed, a profile, a direct post
+   (`https://www.instagram.com/p/<shortcode>/`) or reel page, saved posts,
+   etc.
+2. For every post card the extension recognizes (an image plus a
+   like/comment/share/save icon row), a small pink/purple **"Export ZIP"**
+   button appears just to the left of that post's save/bookmark icon. It
+   follows the post as you scroll and disappears while the post is off
+   screen.
+3. Click it. The button shows "Exporting…" while it fetches that post's
+   visible images, then your browser downloads
+   `instagram-<post|reel>-<shortcode>.zip`.
+
+Only real post/reel cards get a button — grid thumbnails (e.g. a profile's
+grid view) and sidebar widgets don't expose enough of an action-icon row to
+qualify, so they're skipped.
 
 ## Local testing (no real Instagram access needed)
 
@@ -134,6 +148,16 @@ logged-in session.
   frequently, so extraction relies on structural heuristics (tag names,
   roles, `srcset`, `og:description`) rather than fixed class names. Instagram
   layout changes may require selector updates over time.
+- **Button placement:** the button anchors to the save/bookmark icon's
+  position, found by matching its `aria-label` against a handful of known
+  translations (English, French, Spanish, Portuguese, German, Italian) with
+  a same-row-icon fallback. In another UI language, or if Instagram
+  restructures the action row, the button may anchor to the wrong icon or
+  not appear at all for that post — other posts are unaffected.
+- **Post-card detection:** a card needs both an image and 3+ labeled icons
+  to be recognized as an exportable post (filters out grid thumbnails and
+  sidebar widgets). A post Instagram renders without that many icons
+  (e.g. a stripped-down layout) won't get a button.
 
 ## Future improvements
 

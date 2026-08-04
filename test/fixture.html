@@ -54,6 +54,17 @@
 
       <img alt="profile picture of testuser" width="32" height="32"
            src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
+
+      <!-- Simulated action row (like / comment / share / save), matching
+           real Instagram's markup shape closely enough for
+           findSaveButtonAnchor(): svg[aria-label] icons, save/bookmark last. -->
+      <div class="action-row">
+        <div role="button"><svg aria-label="J’aime" viewBox="0 0 24 24" width="24" height="24"></svg></div>
+        <div role="button"><svg aria-label="Commenter" viewBox="0 0 24 24" width="24" height="24"></svg></div>
+        <div role="button"><svg aria-label="Partager" viewBox="0 0 24 24" width="24" height="24"></svg></div>
+        <div role="button"><svg aria-label="Enregistrer" viewBox="0 0 24 24" width="24" height="24"></svg></div>
+      </div>
+
       <ul>
         <li><span dir="auto">12 likes</span></li>
       </ul>
@@ -62,6 +73,7 @@
   </main>
 
   <button id="run-test" type="button">Run export test</button>
+  <button id="preview-position" type="button">Preview anchored button position</button>
   <div id="log"></div>
 
   <script src="../src/zip.js"></script>
@@ -124,6 +136,37 @@
       const blob = new Blob([zipBytes], { type: 'application/zip' });
       download.downloadBlob(blob, `instagram-${type}-${shortcode}.zip`);
       log('Download triggered: instagram-' + type + '-' + shortcode + '.zip');
+    });
+
+    // Demonstrates the same anchoring math src/content.js uses to place a
+    // per-post button next to its save/bookmark icon (findSaveButtonAnchor +
+    // getBoundingClientRect), against this fixture's simulated action row.
+    document.getElementById('preview-position').addEventListener('click', () => {
+      const { extractor } = window.IGExporter;
+      const root = extractor.findPostRoot(document);
+      const isPostArticle = extractor.looksLikePostArticle(root);
+      log('looksLikePostArticle(article):', isPostArticle);
+
+      let demoBtn = document.getElementById('demo-anchored-btn');
+      if (!demoBtn) {
+        demoBtn = document.createElement('button');
+        demoBtn.id = 'demo-anchored-btn';
+        demoBtn.type = 'button';
+        demoBtn.className = 'ig-exporter-btn ig-exporter-btn--anchored';
+        demoBtn.textContent = 'Export ZIP';
+        document.body.appendChild(demoBtn);
+      }
+
+      const anchor = extractor.findSaveButtonAnchor(document, root);
+      if (!anchor) {
+        log('No save-icon anchor found.');
+        return;
+      }
+      const rect = anchor.getBoundingClientRect();
+      const btnRect = demoBtn.getBoundingClientRect();
+      demoBtn.style.top = `${Math.max(8, rect.top + rect.height / 2 - btnRect.height / 2)}px`;
+      demoBtn.style.left = `${Math.max(8, rect.left - btnRect.width - 8)}px`;
+      log('Anchored demo button to the left of the "Enregistrer" icon — check the bottom-left of the action row above.');
     });
   </script>
 </body>
