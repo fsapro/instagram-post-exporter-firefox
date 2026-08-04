@@ -107,17 +107,24 @@
     return candidates;
   }
 
-  /** Picks the highest-resolution URL from an <img>'s srcset (falls back to src). */
+  /**
+   * Picks the highest-resolution URL for an <img>. Checks `srcset` before
+   * `src`, and also falls back to the `data-srcset`/`data-src` attributes
+   * some lazy-loading carousel implementations use to hold an image's real
+   * URL before it swaps into `src`/`srcset` on load — reading them is still
+   * just reading attributes already present in the DOM, not triggering any
+   * loading ourselves.
+   */
   function resolveBestImageSrc(img) {
-    const srcset = img.getAttribute('srcset');
-    if (srcset) {
-      const candidates = parseSrcset(srcset);
+    const srcsetAttr = img.getAttribute('srcset') || img.getAttribute('data-srcset');
+    if (srcsetAttr) {
+      const candidates = parseSrcset(srcsetAttr);
       candidates.sort((a, b) => b.width - a.width);
       if (candidates.length && candidates[0].url) {
         return candidates[0].url;
       }
     }
-    return img.getAttribute('src') || '';
+    return img.getAttribute('src') || img.getAttribute('data-src') || '';
   }
 
   /** Heuristic filter to skip avatars/icons and keep actual post content images. */
@@ -135,15 +142,25 @@
     if (width && height && width < 100 && height < 100) {
       return false; // likely an avatar or UI icon
     }
-    if (!img.getAttribute('src') && !img.getAttribute('srcset')) {
+    const hasAnySource =
+      img.getAttribute('src') ||
+      img.getAttribute('srcset') ||
+      img.getAttribute('data-src') ||
+      img.getAttribute('data-srcset');
+    if (!hasAnySource) {
       return false;
     }
     return true;
   }
 
   /**
-   * Returns visible content images for the current post as
-   * [{ url, alt }], deduplicated by resolved URL.
+   * Returns content images for the current post as [{ url, alt }],
+   * deduplicated by resolved URL. For carousel posts this naturally
+   * includes every slide Instagram has already rendered into the DOM
+   * (whether currently on-screen or scrolled off to the side) — nothing
+   * here scrolls, clicks, or otherwise drives the carousel forward to force
+   * additional slides to load, since that would be automated interaction
+   * rather than reading what's already visible/rendered.
    */
   function extractPostImages(doc, root) {
     const scope = root || findPostRoot(doc);

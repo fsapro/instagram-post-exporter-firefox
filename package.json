@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "lint": "web-ext lint --ignore-files=test/** --ignore-files=docs/**",
-    "start": "web-ext run -s ."
+    "start": "web-ext run -s .",
+    "build": "web-ext build --overwrite-dest --ignore-files=test/** --ignore-files=docs/** --ignore-files=package.json --ignore-files=package-lock.json --ignore-files=README.md --ignore-files=.gitignore"
   },
   "devDependencies": {
     "web-ext": "^8.3.0"

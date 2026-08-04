@@ -64,6 +64,18 @@ rendered in the page the user has open:
   splitting on `,` — a plain comma-split misparses any candidate URL that
   itself contains a comma, such as a `data:` URI's `base64,` marker (see
   `test/instagramExtractor.test.js`).
+  - **Carousel slides**: `querySelectorAll('img')` runs over the whole post
+    subtree, so every slide a carousel has already rendered into the DOM is
+    picked up, not just the currently on-screen one — Instagram carousels
+    typically render every slide's `<img>` inside a horizontally-scrolling
+    `<ul>`, they just aren't all visible on screen at once.
+  - **Lazy-loaded slides**: `resolveBestImageSrc()`/`isLikelyContentImage()`
+    also check `data-src`/`data-srcset` after `src`/`srcset`, since some
+    lazy-loading implementations hold a not-yet-visible slide's real image
+    URL there until it scrolls into view. Reading those attributes is still
+    just reading DOM state that's already present — nothing is scrolled,
+    clicked, or otherwise driven to force a slide that hasn't rendered at
+    all yet to appear.
 - **Description** — tries, in order: the post's `<h1>` (if present and
   non-trivial), the first sufficiently long `<span>` text inside a `<ul><li>`
   block that isn't a like-count/timestamp, then the page's own

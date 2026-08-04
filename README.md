@@ -53,6 +53,37 @@ npm run start
 
 This launches a Firefox instance with the extension pre-loaded.
 
+## Install from a packaged file ("Installer un module depuis un fichier…")
+
+To get a `.zip`/`.xpi` you can hand to Firefox's **Modules complémentaires**
+page (gear icon → **"Installer un module depuis un fichier…"**):
+
+```bash
+npm install
+npm run build
+```
+
+This produces `web-ext-artifacts/instagram_post_exporter-<version>.zip`.
+
+**Signing caveat:** release/beta Firefox only installs extensions from that
+dialog if they're signed by Mozilla (`xpinstall.signatures.required` is
+`true` by default), so a locally built package will normally be rejected
+as "corrompu"/unverified there. Two ways around that, depending on what you
+have:
+
+- **Firefox Developer Edition, Nightly, or ESR:** go to `about:config`, set
+  `xpinstall.signatures.required` to `false`, then use "Installer un module
+  depuis un fichier…" with the built `.zip`/`.xpi` — it installs
+  permanently (survives restarts) and updates whenever you rebuild.
+- **Any Firefox (including regular release):** use the temporary-install
+  flow above instead (`about:debugging#/runtime/this-firefox` → *Load
+  Temporary Add-on…*, selecting `manifest.json` directly, no build step or
+  signing needed) — the only downside is it's removed on browser restart.
+- **Permanent install on regular release Firefox:** submit the built
+  package to [addons.mozilla.org](https://addons.mozilla.org) for Mozilla
+  to sign (self-distribution or public listing); out of scope for local
+  development/testing.
+
 ## Usage
 
 1. Navigate to any Instagram post (`https://www.instagram.com/p/<shortcode>/`)
@@ -86,10 +117,14 @@ logged-in session.
 
 ## Known limitations
 
-- **Carousel posts:** only images currently present/loaded in the DOM are
-  exported. The extension does not auto-advance carousel slides (that would
-  be a form of automated interaction beyond reading visible content), so
-  slides you haven't scrolled to may be missing.
+- **Carousel posts:** every slide Instagram has already rendered into the
+  DOM is exported (including off-screen ones, and lazy-loaded slides that
+  only expose a `data-src`/`data-srcset` attribute so far) — see
+  `test/fixture.html` for a worked 3-slide example. The extension does not
+  auto-advance the carousel or scroll/click to force additional slides to
+  render (that would be automated interaction beyond reading visible
+  content), so a slide Instagram hasn't rendered at all yet may still be
+  missing.
 - **Post date:** Instagram doesn't always expose a machine-readable
   timestamp in the visible DOM. When it's not available, `post.md` records
   `post_date: "not available in visible page"`.

@@ -16,8 +16,10 @@
 <body>
   <h2>Instagram Post Exporter — local fixture</h2>
   <p>
-    This page fakes a minimal Instagram post DOM (article, images, caption,
-    timestamp). No network access to instagram.com is made or needed — the
+    This page fakes a minimal Instagram post DOM: a 3-slide carousel
+    (article, images, caption, timestamp), including one lazy-loaded slide
+    that only has a <code>data-src</code>/<code>data-srcset</code> until it
+    "loads". No network access to instagram.com is made or needed — the
     images below are inline data URIs. Use this to exercise the extraction /
     ZIP / download pipeline (<code>src/instagramExtractor.js</code>,
     <code>src/markdown.js</code>, <code>src/zip.js</code>,
@@ -27,11 +29,29 @@
   <main>
     <article>
       <h1>A lovely sunset over the mountains #travel</h1>
-      <img alt="Photo by testuser" width="640" height="640"
-           src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-           srcset="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw== 640w" />
-      <img alt="Photo by testuser" width="640" height="640"
-           src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
+
+      <!-- Simulated carousel: 3 slides already rendered into the DOM by
+           Instagram's client-side carousel (slide 3 mimics a lazy-loaded
+           slide whose real URL is still in data-src/data-srcset rather than
+           src/srcset). No auto-advance/scroll/click is used to produce
+           this — it's just what a carousel post's DOM commonly contains. -->
+      <ul class="carousel">
+        <li>
+          <img alt="Photo by testuser, slide 1 of 3" width="640" height="640"
+               src="data:image/gif;base64,R0lGODlhAQABAPAAAP8AAP///yH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
+               srcset="data:image/gif;base64,R0lGODlhAQABAPAAAP8AAP///yH5BAAAAAAALAAAAAABAAEAAAICRAEAOw== 640w" />
+        </li>
+        <li>
+          <img alt="Photo by testuser, slide 2 of 3" width="640" height="640"
+               src="data:image/gif;base64,R0lGODlhAQABAPAAAAD/AP///yH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==" />
+        </li>
+        <li>
+          <img alt="Photo by testuser, slide 3 of 3 (lazy)" width="640" height="640"
+               data-src="data:image/gif;base64,R0lGODlhAQABAPAAAAAA/////yH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
+               data-srcset="data:image/gif;base64,R0lGODlhAQABAPAAAAAA/////yH5BAAAAAAALAAAAAABAAEAAAICRAEAOw== 640w" />
+        </li>
+      </ul>
+
       <img alt="profile picture of testuser" width="32" height="32"
            src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
       <ul>
@@ -70,7 +90,8 @@
 
       log('shortcode:', shortcode);
       log('type:', type);
-      log('images found (expected 2, avatar excluded):', images.length);
+      log('images found (expected 3 carousel slides, avatar excluded):', images.length);
+      images.forEach((img, i) => log(`  slide ${i + 1}:`, img.alt));
       log('description:', description);
       log('postDate:', postDate);
 
