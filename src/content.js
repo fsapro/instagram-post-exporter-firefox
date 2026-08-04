@@ -84,14 +84,21 @@
     return MIME_BY_EXTENSION[guessExtension(url)] || 'image/jpeg';
   }
 
-  /** Encodes raw bytes to base64 in chunks — avoids a call-stack overflow from spreading a large array. */
-  function bytesToBase64(bytes) {
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-    }
-    return btoa(binary);
+  /**
+   * Encodes raw bytes as a data: URL via FileReader — not
+   * `String.fromCharCode.apply(null, bytes)` + `btoa()`, which throws
+   * "Permission denied to access property 'constructor'" in a Firefox
+   * content script (an Xray-wrapper security restriction on spreading a
+   * typed array through `Function.prototype.apply`). FileReader sidesteps
+   * it entirely and needs no manual chunking for large images either.
+   */
+  function bytesToDataUrl(bytes, mimeType) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+      reader.readAsDataURL(new Blob([bytes], { type: mimeType }));
+    });
   }
 
   /**
@@ -139,7 +146,7 @@
     for (const img of images) {
       try {
         const bytes = await fetchImageBytes(img.url);
-        const dataUrl = `data:${guessMimeType(img.url)};base64,${bytesToBase64(bytes)}`;
+        const dataUrl = await bytesToDataUrl(bytes, guessMimeType(img.url));
         embeddedImages.push({ alt: img.alt, dataUrl });
       } catch (err) {
         console.warn('[Instagram Post Exporter] Skipping image (fetch failed):', img.url, err);

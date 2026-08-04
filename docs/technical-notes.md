@@ -247,14 +247,20 @@ reads that setting on each click and branches:
   `post.md` go into `src/zip.js`'s in-memory archive, saved via
   `download.js`'s `URL.createObjectURL(blob)` + `<a download>` technique
   (see "Triggering a ZIP download" below). No privileged API involved.
-- **`embedded-md`** — each image is fetched, base64-encoded
-  (`bytesToBase64()`, chunked in 0x8000-byte pieces via
-  `String.fromCharCode.apply` to avoid a call-stack overflow spreading a
-  large `Uint8Array` at once), and inlined directly into the Markdown via
-  `markdown.js`'s `images` parameter as `![alt](data:image/jpeg;base64,...)`
-  — one self-contained `.md` file, no separate image files. The finished
-  Markdown text (a plain JS string — no `data:` URL, no base64, see below
-  for why) is sent to the background script.
+- **`embedded-md`** — each image is fetched and turned into a
+  `data:image/jpeg;base64,...` URL via `bytesToDataUrl()`
+  (`new Blob([bytes]) `+ `FileReader.readAsDataURL()`), then inlined
+  directly into the Markdown through `markdown.js`'s `images` parameter as
+  `![alt](data:...)` — one self-contained `.md` file, no separate image
+  files. The finished Markdown text (a plain JS string — no `data:` URL, no
+  base64, see below for why) is sent to the background script.
+  `bytesToDataUrl()` deliberately does **not** use the common
+  `String.fromCharCode.apply(null, bytes)` + `btoa()` idiom for
+  bytes-to-base64: that throws `Permission denied to access property
+  "constructor"` when run in a Firefox content script — an Xray-wrapper
+  security restriction triggered by spreading a typed array through
+  `Function.prototype.apply` there. `FileReader.readAsDataURL()` sidesteps
+  it completely (and needs no manual chunking for large images either).
 
 ### Why a background script only for this one mode
 
