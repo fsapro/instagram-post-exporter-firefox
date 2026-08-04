@@ -216,6 +216,46 @@ case to never silently fail, `content.js` handles it separately:
   never simply invisible — it might not be perfectly anchored, but it's
   always clickable somewhere.
 
+### Accumulating carousel images across ticks, not just at click time
+
+`extractPostImages()` only ever sees what's *currently* in the DOM — a
+single call at export time can't see more than Instagram happens to have
+mounted at that exact instant. This matters a lot for carousels: Instagram
+commonly virtualizes them, keeping only the current slide plus one
+neighbor mounted at once and unmounting earlier slides as the user swipes
+further. A one-shot extraction at click time therefore can't ever recover
+more than ~2 slides, regardless of how much of the carousel the user
+actually looked at before exporting — this was a real regression from an
+earlier version, where the browser's own image-preloading behavior
+happened to leave more slides in the DOM at once.
+
+The fix: `content.js` keeps `imageCache`, a `Map<article, Map<url,
+{url, alt}>>` of every image `extractPostImages()` has ever returned for
+each tracked post, merged in (not replaced) on:
+
+- every 1s poll tick (`updateAllImageCaches()`), and
+- a `MutationObserver` on `document.body` (`childList`/`subtree`,
+  `requestAnimationFrame`-throttled) — the poll alone can miss a slide
+  that gets mounted and unmounted again within the same second (e.g. fast
+  swiping), so the observer catches DOM changes as they happen instead of
+  only once a second.
+
+`exportArticle()` does one final `updateImageCache()` call (to catch
+whatever slide is on-screen right at click time) and then reads the
+*accumulated* set, not a fresh extraction — so an image the user swiped
+past a minute ago is still included even though Instagram has since
+removed its `<img>` from the DOM entirely. The cache entry for a post is
+dropped in `cleanupButtons()` alongside its button, when the post's
+`<article>` itself leaves the DOM (e.g. scrolled far past in a virtualized
+feed) — at that point there's nothing left to accumulate for it anyway.
+
+This still never auto-advances the carousel or otherwise interacts with
+the page — it only remembers DOM states the user's own browsing already
+produced. A slide the user never actually scrolled to while the post's
+button existed still won't be included; the button's result label always
+shows the found count (see `exportArticle()`) so a short export is visible
+immediately rather than silently under-counting.
+
 ## Image fetching and permissions
 
 Content-script `fetch()` calls are subject to the same CORS rules as the

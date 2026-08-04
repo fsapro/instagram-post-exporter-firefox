@@ -34,8 +34,36 @@
   /** Map<article-or-post-root element, { btn, isPrimary }> for every post card we've found. */
   const buttons = new Map();
 
+  /**
+   * Map<article, Map<url, {url, alt}>> — every content image seen so far
+   * for each tracked post, accumulated across ticks rather than read fresh
+   * only at export time. Instagram's carousel commonly virtualizes: it only
+   * keeps the current slide plus one neighbor mounted in the DOM at once,
+   * unmounting earlier slides as the user swipes further — so a single
+   * snapshot at click time can never see more than ~2 slides, no matter how
+   * much of the carousel the user has actually looked at. Since we already
+   * poll the DOM once a second anyway, merging each tick's findings into a
+   * running per-post set means anything the user has scrolled past is
+   * still remembered even after Instagram removes it from the DOM.
+   */
+  const imageCache = new Map();
+
   function modules() {
     return window.IGExporter || {};
+  }
+
+  /** Merges any newly-visible images for `article` into its running cache. */
+  function updateImageCache(article, extractor) {
+    const found = extractor.extractPostImages(document, article);
+    let seen = imageCache.get(article);
+    if (!seen) {
+      seen = new Map();
+      imageCache.set(article, seen);
+    }
+    for (const img of found) {
+      if (!seen.has(img.url)) seen.set(img.url, img);
+    }
+    return seen;
   }
 
   function isDirectPostPath(pathname) {
@@ -179,7 +207,10 @@
 
     try {
       const { url, shortcode, type } = resolvePostContext(article, extractor);
-      const images = extractor.extractPostImages(document, article);
+      // One last refresh to catch the currently-displayed slide, then use
+      // everything accumulated for this post so far (see imageCache above)
+      // rather than just what's mounted in the DOM at this exact instant.
+      const images = Array.from(updateImageCache(article, extractor).values());
       const description = extractor.extractDescription(document, article);
       const postDate = extractor.extractPostDate(document, article);
       const exportDate = new Date().toISOString();
@@ -289,14 +320,20 @@
     buttons.set(root, { btn: createButtonFor(root), isPrimary: true });
   }
 
-  /** Drops buttons whose backing element has left the DOM (e.g. a virtualized feed item). */
+  /** Drops buttons (and their image cache) whose backing element has left the DOM (e.g. a virtualized feed item). */
   function cleanupButtons() {
     buttons.forEach((entry, article) => {
       if (!document.body.contains(article)) {
         entry.btn.remove();
         buttons.delete(article);
+        imageCache.delete(article);
       }
     });
+  }
+
+  /** Refreshes the accumulated image cache for every currently-tracked post. */
+  function updateAllImageCaches(extractor) {
+    buttons.forEach((_entry, article) => updateImageCache(article, extractor));
   }
 
   function repositionAll(extractor) {
@@ -319,6 +356,7 @@
     if (!extractor) return;
     ensurePrimaryPostButton(extractor);
     scanForPosts(extractor);
+    updateAllImageCaches(extractor);
     cleanupButtons();
     scheduleReposition();
   }
@@ -336,4 +374,23 @@
   // scan or path-based navigation hooks.
   setInterval(tick, 1000);
   tick();
+
+  // The 1s poll alone can miss a carousel slide that gets mounted and then
+  // unmounted again (Instagram virtualizing to the next slide) within the
+  // same second, e.g. a user swiping through quickly. A MutationObserver
+  // catches every DOM change as it happens, so image caches stay accurate
+  // even between poll ticks — it only refreshes existing posts' image
+  // caches (rAF-throttled so a burst of mutations doesn't cause a refresh
+  // per mutation); new-post discovery still runs on the regular poll.
+  let mutationRefreshQueued = false;
+  const mutationObserver = new MutationObserver(() => {
+    if (mutationRefreshQueued) return;
+    mutationRefreshQueued = true;
+    requestAnimationFrame(() => {
+      mutationRefreshQueued = false;
+      const { extractor } = modules();
+      if (extractor) updateAllImageCaches(extractor);
+    });
+  });
+  mutationObserver.observe(document.body, { childList: true, subtree: true });
 })();

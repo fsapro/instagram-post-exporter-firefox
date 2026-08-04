@@ -160,21 +160,26 @@ logged-in session.
 
 ## Known limitations
 
-- **Carousel posts:** every slide Instagram has already rendered into the
-  DOM is exported (including off-screen ones, and lazy-loaded slides that
-  only expose a `data-src`/`data-srcset` attribute so far) — see
-  `test/fixture.html` for a worked 3-slide example. The extension does not
-  auto-advance the carousel or scroll/click to force additional slides to
-  render (that would be automated interaction beyond reading visible
-  content), so a slide Instagram hasn't rendered at all yet may still be
-  missing. **In practice:** Instagram typically only pre-renders the
-  first slide (or first two) into the DOM until you actually swipe/click
-  through the carousel yourself — so if you export right after a post
-  loads, you may only get 1–2 images even on a longer carousel. Manually
-  flick through every slide once (just to have looked at them) *before*
-  clicking Export to make sure they're all in the DOM first. The button's
-  label after exporting always shows the count it found (e.g. "Exported ✓
-  (2 images)"), so you can tell at a glance if it came up short.
+- **Carousel posts:** Instagram typically virtualizes a carousel — only the
+  current slide plus one neighbor are ever mounted in the DOM at once,
+  unmounting earlier slides as you swipe further. Rather than reading the
+  DOM only once at click time (which could then never see more than ~2
+  slides no matter how much of the carousel you'd actually viewed), the
+  extension accumulates every image it has seen for a post since its
+  button first appeared, refreshed both on a 1s poll and immediately on
+  any DOM change (via a `MutationObserver`) — so slides you swiped past
+  earlier are still included even after Instagram removes them from the
+  DOM. It still never auto-advances the carousel itself or clicks/scrolls
+  anything on your behalf (that would be automated interaction beyond
+  reading visible content) — so a slide you never actually viewed while
+  the post was open still won't be included, and if you export within the
+  same second the post first loads (before having looked at any slide but
+  the first), you may only get 1 image. The button's label after exporting
+  always shows the count it found (e.g. "Exported ✓ (3 images)"), so you
+  can tell at a glance if it came up short and, if so, browse through the
+  remaining slides and export again — the count will include everything
+  seen across both attempts as long as the post's button hasn't
+  disappeared (e.g. from scrolling far away) in between.
 - **Post date:** Instagram doesn't always expose a machine-readable
   timestamp in the visible DOM. When it's not available, `post.md` records
   `post_date: "not available in visible page"`.
