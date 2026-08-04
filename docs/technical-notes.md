@@ -81,11 +81,26 @@ rendered in the page the user has open:
     clicked, or otherwise driven to force a slide that hasn't rendered at
     all yet to appear.
 - **Description** — tries, in order: the post's `<h1>` (if present and
-  non-trivial), the first sufficiently long `<span>` text inside a `<ul><li>`
-  block that isn't a like-count/timestamp, then the page's own
-  `meta[property="og:description"]` tag, then `document.title`. All of these
-  are part of the single document already loaded in the tab — no extra
-  request is made to obtain any of them.
+  non-trivial), the first `<li>` (inside a `<ul>`) whose full text is
+  long enough to be a caption rather than a like-count/timestamp, then the
+  page's own `meta[property="og:description"]` tag, then `document.title`.
+  All of these are part of the single document already loaded in the tab —
+  no extra request is made to obtain any of them.
+  - The `<h1>`/`<li>` candidates are read with `getTextWithLineBreaks()`,
+    not `.textContent`. Two real bugs this fixes: (1) `.textContent`
+    silently drops `<br>` entirely (contributes zero characters, so "Line
+    1<br>Line 2" becomes "Line 1Line 2" with no separator at all) — this
+    is why an earlier version of this extractor lost line breaks in
+    multi-line captions; (2) an earlier version returned as soon as it
+    found *one* `<span>` with enough text, which only grabs one fragment
+    of a caption Instagram splits across several sibling
+    spans/links (e.g. around hashtag/mention `<a>` tags) — now the full
+    `<li>` text is read instead, concatenating every fragment.
+    `normalizeCaptionText()` then trims each line and collapses 3+ blank
+    lines down to one. `markdown.js`'s `formatMultilineForMarkdown()`
+    turns each `\n` into a Markdown hard break (`  \n`) when building
+    `post.md`, since a bare `\n` is just a soft break most renderers
+    collapse to a space.
 - **Post date** — a `time[datetime]` element inside the post root, if
   present. Instagram does not always render this in a way that's reliably
   present in the DOM, so it's treated as best-effort and clearly labeled as

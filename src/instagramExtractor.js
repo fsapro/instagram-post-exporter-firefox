@@ -182,6 +182,46 @@
     return /^\d+\s*(likes?|vues?|views?|j|w|h|m|s|min|sem|semaines?)$/i.test(text.trim());
   }
 
+  const BLOCK_TAGS = new Set(['DIV', 'P', 'LI', 'BR']);
+
+  /**
+   * Serializes an element's text the way a user actually reads it, unlike
+   * `.textContent` — which silently drops `<br>` entirely (it contributes
+   * zero characters, so "Line 1<br>Line 2" becomes "Line 1Line 2" with no
+   * separator at all) and doesn't add anything between block-level
+   * children either. Instagram captions commonly use `<br>` for line
+   * breaks and split plain text around `<a>` mention/hashtag links, so a
+   * naive `.textContent` read either loses every line break or (if only
+   * one fragment is read, as an earlier version of this extractor did)
+   * loses everything after the first hashtag/mention.
+   */
+  function getTextWithLineBreaks(node) {
+    let out = '';
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === 3) {
+        out += child.textContent;
+      } else if (child.nodeType === 1) {
+        if (child.tagName === 'BR') {
+          out += '\n';
+        } else {
+          out += getTextWithLineBreaks(child);
+          if (BLOCK_TAGS.has(child.tagName)) out += '\n';
+        }
+      }
+    });
+    return out;
+  }
+
+  /** Collapses the raw serialized text into readable caption text: trims each line, drops 3+ blank lines down to 1. */
+  function normalizeCaptionText(text) {
+    return text
+      .split('\n')
+      .map((line) => line.trim())
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
   /**
    * Best-effort extraction of the visible caption/description text.
    * Falls back through a few structural heuristics before finally reading
@@ -192,18 +232,16 @@
     const scope = root || findPostRoot(doc);
 
     const h1 = scope.querySelector('h1');
-    if (h1 && h1.textContent && h1.textContent.trim().length > 2) {
-      return h1.textContent.trim();
+    if (h1) {
+      const text = normalizeCaptionText(getTextWithLineBreaks(h1));
+      if (text.length > 2) return text;
     }
 
     const listItems = scope.querySelectorAll('ul li');
     for (const li of listItems) {
-      const spans = li.querySelectorAll('span[dir="auto"], span');
-      for (const span of spans) {
-        const text = (span.textContent || '').trim();
-        if (text.length > 15 && !looksLikeStatOrTimestamp(text)) {
-          return text;
-        }
+      const text = normalizeCaptionText(getTextWithLineBreaks(li));
+      if (text.length > 15 && !looksLikeStatOrTimestamp(text)) {
+        return text;
       }
     }
 
@@ -283,6 +321,8 @@
     findSaveButtonAnchor,
     looksLikePostArticle,
     findPostPermalink,
+    getTextWithLineBreaks,
+    normalizeCaptionText,
   };
 
   global.IGExporter = global.IGExporter || {};

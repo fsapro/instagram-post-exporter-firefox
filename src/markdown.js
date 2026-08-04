@@ -12,6 +12,18 @@
   }
 
   /**
+   * A bare "\n" is just a soft break in Markdown (most renderers collapse
+   * it to a space) — a real visible line break needs a trailing double
+   * space before the newline (the standard Markdown "hard break"). Applied
+   * to the caption body so multi-line captions extracted from Instagram
+   * (see getTextWithLineBreaks in instagramExtractor.js) keep their line
+   * breaks when the .md file is rendered, not just when read as plain text.
+   */
+  function formatMultilineForMarkdown(text) {
+    return String(text || '').split('\n').join('  \n');
+  }
+
+  /**
    * @param {Object} data
    * @param {string} data.url - full URL of the post/reel page
    * @param {string} data.shortcode - Instagram shortcode parsed from the URL
@@ -53,7 +65,7 @@
     lines.push('');
     lines.push('## Description');
     lines.push('');
-    lines.push(description ? description.trim() : '_No visible description found._');
+    lines.push(description ? formatMultilineForMarkdown(description.trim()) : '_No visible description found._');
     lines.push('');
     lines.push('## Images');
     lines.push('');
@@ -67,7 +79,7 @@
     return lines.join('\n');
   }
 
-  const api = { buildPostMarkdown };
+  const api = { buildPostMarkdown, formatMultilineForMarkdown };
 
   global.IGExporter = global.IGExporter || {};
   global.IGExporter.markdown = api;

@@ -13,7 +13,17 @@ const {
   findSaveButtonAnchor,
   looksLikePostArticle,
   findPostPermalink,
+  getTextWithLineBreaks,
+  normalizeCaptionText,
 } = require(path.join('..', 'src', 'instagramExtractor.js'));
+
+/** Minimal fake text/element nodes — just enough for getTextWithLineBreaks. */
+function fakeTextNode(text) {
+  return { nodeType: 3, textContent: text };
+}
+function fakeElement(tagName, children) {
+  return { nodeType: 1, tagName, childNodes: children };
+}
 
 /** Minimal fake <img> — resolveBestImageSrc/isLikelyContentImage only ever call getAttribute(). */
 function fakeImg(attrs) {
@@ -167,4 +177,30 @@ test('findPostPermalink reads the feed card\'s own /p//reel/ link when present',
     '/p/ABC123/'
   );
   assert.equal(findPostPermalink(fakeArticle({})), null);
+});
+
+test('getTextWithLineBreaks converts <br> to a newline (plain textContent would drop it entirely)', () => {
+  const node = fakeElement('DIV', [fakeTextNode('Line 1'), fakeElement('BR', []), fakeTextNode('Line 2')]);
+  assert.equal(getTextWithLineBreaks(node), 'Line 1\nLine 2');
+});
+
+test('getTextWithLineBreaks concatenates text split across inline elements (e.g. around a hashtag/mention link)', () => {
+  const node = fakeElement('SPAN', [
+    fakeTextNode('Check out my trip '),
+    fakeElement('A', [fakeTextNode('#travel')]),
+    fakeTextNode(' it was amazing!'),
+  ]);
+  assert.equal(getTextWithLineBreaks(node), 'Check out my trip #travel it was amazing!');
+});
+
+test('getTextWithLineBreaks adds a newline after block-level children (e.g. caption built from <div> lines)', () => {
+  const node = fakeElement('DIV', [
+    fakeElement('DIV', [fakeTextNode('Line 1')]),
+    fakeElement('DIV', [fakeTextNode('Line 2')]),
+  ]);
+  assert.equal(getTextWithLineBreaks(node), 'Line 1\nLine 2\n');
+});
+
+test('normalizeCaptionText trims each line and collapses 3+ blank lines down to one', () => {
+  assert.equal(normalizeCaptionText('  Line 1  \n\n\n\n  Line 2  '), 'Line 1\n\nLine 2');
 });
