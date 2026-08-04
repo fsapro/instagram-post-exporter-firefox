@@ -167,7 +167,14 @@ logged-in session.
   auto-advance the carousel or scroll/click to force additional slides to
   render (that would be automated interaction beyond reading visible
   content), so a slide Instagram hasn't rendered at all yet may still be
-  missing.
+  missing. **In practice:** Instagram typically only pre-renders the
+  first slide (or first two) into the DOM until you actually swipe/click
+  through the carousel yourself — so if you export right after a post
+  loads, you may only get 1–2 images even on a longer carousel. Manually
+  flick through every slide once (just to have looked at them) *before*
+  clicking Export to make sure they're all in the DOM first. The button's
+  label after exporting always shows the count it found (e.g. "Exported ✓
+  (2 images)"), so you can tell at a glance if it came up short.
 - **Post date:** Instagram doesn't always expose a machine-readable
   timestamp in the visible DOM. When it's not available, `post.md` records
   `post_date: "not available in visible page"`.

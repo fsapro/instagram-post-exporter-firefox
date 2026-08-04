@@ -191,10 +191,17 @@
           ? await exportAsEmbeddedMarkdown({ markdown }, images, common, userSettings.subfolder)
           : await exportAsZip({ markdown, zip, download }, images, common);
 
+      // Always shows the image count, not just on partial failure — a low
+      // count can also mean the extraction itself only found that many
+      // images rendered in the DOM at click time (e.g. a carousel Instagram
+      // hasn't fully rendered yet), which looks identical to "done" unless
+      // the count is visible right on the button.
       const resultLabel =
-        result.total > 0 && result.successCount < result.total
-          ? `Exported (${result.successCount}/${result.total} images)`
-          : 'Exported ✓';
+        result.total === 0
+          ? 'Exported ✓ (no images)'
+          : result.successCount < result.total
+            ? `Exported (${result.successCount}/${result.total} images)`
+            : `Exported ✓ (${result.total} image${result.total > 1 ? 's' : ''})`;
       setButtonState(btn, 'idle', resultLabel, defaultLabel);
       setTimeout(() => setButtonState(btn, 'idle', null, defaultLabel), 3000);
     } catch (err) {
