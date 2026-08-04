@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Fixture: Instagram Post Exporter (local test)</title>
+<meta property="og:description" content="42 likes, testuser: Fallback description from meta tag" />
+<link rel="stylesheet" href="../src/styles.css" />
+<style>
+  body { font-family: sans-serif; max-width: 640px; margin: 40px auto; }
+  article { border: 1px solid #ddd; padding: 16px; border-radius: 8px; }
+  img { max-width: 200px; display: block; margin: 8px 0; }
+  #log { white-space: pre-wrap; background: #111; color: #0f0; padding: 12px; margin-top: 16px; font-family: monospace; font-size: 12px; min-height: 40px; }
+  #run-test { padding: 8px 16px; font-size: 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+  <h2>Instagram Post Exporter — local fixture</h2>
+  <p>
+    This page fakes a minimal Instagram post DOM (article, images, caption,
+    timestamp). No network access to instagram.com is made or needed — the
+    images below are inline data URIs. Use this to exercise the extraction /
+    ZIP / download pipeline (<code>src/instagramExtractor.js</code>,
+    <code>src/markdown.js</code>, <code>src/zip.js</code>,
+    <code>src/download.js</code>) without opening real Instagram.
+  </p>
+
+  <main>
+    <article>
+      <h1>A lovely sunset over the mountains #travel</h1>
+      <img alt="Photo by testuser" width="640" height="640"
+           src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+           srcset="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw== 640w" />
+      <img alt="Photo by testuser" width="640" height="640"
+           src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
+      <img alt="profile picture of testuser" width="32" height="32"
+           src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
+      <ul>
+        <li><span dir="auto">12 likes</span></li>
+      </ul>
+      <time datetime="2026-07-30T12:00:00.000Z">30 juillet</time>
+    </article>
+  </main>
+
+  <button id="run-test" type="button">Run export test</button>
+  <div id="log"></div>
+
+  <script src="../src/zip.js"></script>
+  <script src="../src/markdown.js"></script>
+  <script src="../src/instagramExtractor.js"></script>
+  <script src="../src/download.js"></script>
+  <script>
+    const logEl = document.getElementById('log');
+    function log(...args) {
+      logEl.textContent += args
+        .map((a) => (typeof a === 'string' ? a : JSON.stringify(a, null, 2)))
+        .join(' ') + '\n';
+    }
+
+    document.getElementById('run-test').addEventListener('click', async () => {
+      logEl.textContent = '';
+      const { extractor, markdown, zip, download } = window.IGExporter;
+
+      const fakeUrl = 'https://www.instagram.com/p/FIXTURE123/';
+      const shortcode = extractor.extractShortcode(fakeUrl);
+      const type = extractor.extractType(fakeUrl);
+      const root = extractor.findPostRoot(document);
+      const images = extractor.extractPostImages(document, root);
+      const description = extractor.extractDescription(document, root);
+      const postDate = extractor.extractPostDate(document, root);
+
+      log('shortcode:', shortcode);
+      log('type:', type);
+      log('images found (expected 2, avatar excluded):', images.length);
+      log('description:', description);
+      log('postDate:', postDate);
+
+      const files = [];
+      let ok = 0;
+      for (let i = 0; i < images.length; i++) {
+        try {
+          const res = await fetch(images[i].url);
+          const buf = new Uint8Array(await res.arrayBuffer());
+          files.push({ name: `images/${String(i + 1).padStart(2, '0')}.gif`, data: buf });
+          ok++;
+        } catch (e) {
+          log('image fetch failed:', e.message);
+        }
+      }
+
+      const md = markdown.buildPostMarkdown({
+        url: fakeUrl,
+        shortcode,
+        exportDate: new Date().toISOString(),
+        postDate,
+        description,
+        imageCount: ok,
+        type,
+      });
+      files.push({ name: 'post.md', data: new TextEncoder().encode(md) });
+
+      const zipBytes = zip.createZip(files);
+      log('zip size (bytes):', zipBytes.length);
+      const blob = new Blob([zipBytes], { type: 'application/zip' });
+      download.downloadBlob(blob, `instagram-${type}-${shortcode}.zip`);
+      log('Download triggered: instagram-' + type + '-' + shortcode + '.zip');
+    });
+  </script>
+</body>
+</html>

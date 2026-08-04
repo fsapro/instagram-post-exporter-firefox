@@ -1,0 +1,15 @@
+{
+  "name": "instagram-post-exporter-firefox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Firefox WebExtension that exports the currently open Instagram post/reel (visible images + caption) as a local ZIP file.",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "lint": "web-ext lint --ignore-files=test/** --ignore-files=docs/**",
+    "start": "web-ext run -s ."
+  },
+  "devDependencies": {
+    "web-ext": "^8.3.0"
+  },
+  "license": "MIT"
+}
