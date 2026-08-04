@@ -52,3 +52,29 @@ test('buildPostMarkdown preserves a multi-line description as visible line break
   });
   assert.match(md, /Line 1 {2}\nLine 2/);
 });
+
+test('buildPostMarkdown inlines images as Markdown image links when an images array is provided (embedded mode)', () => {
+  const md = buildPostMarkdown({
+    url: 'https://www.instagram.com/p/ABC123/',
+    shortcode: 'ABC123',
+    exportDate: '2026-08-04T10:00:00.000Z',
+    type: 'post',
+    images: [
+      { alt: 'slide 1', dataUrl: 'data:image/jpeg;base64,AAAA' },
+      { alt: '', dataUrl: 'data:image/jpeg;base64,BBBB' },
+    ],
+  });
+  assert.match(md, /!\[slide 1\]\(data:image\/jpeg;base64,AAAA\)/);
+  assert.match(md, /!\[image 2\]\(data:image\/jpeg;base64,BBBB\)/);
+  assert.doesNotMatch(md, /exported to the `images\/` folder/);
+});
+
+test('buildPostMarkdown strips brackets from alt text so an embedded image link can\'t be broken', () => {
+  const md = buildPostMarkdown({
+    url: 'https://www.instagram.com/p/ABC123/',
+    shortcode: 'ABC123',
+    type: 'post',
+    images: [{ alt: 'weird [alt] text', dataUrl: 'data:image/jpeg;base64,AAAA' }],
+  });
+  assert.match(md, /!\[weird alt text\]\(data:image\/jpeg;base64,AAAA\)/);
+});

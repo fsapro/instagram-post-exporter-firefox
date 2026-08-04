@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Instagram Post Exporter",
-  "version": "0.1.0",
-  "description": "Export the currently open Instagram post or reel (visible images + caption) as a local ZIP file. No server, no scraping, no automation.",
+  "version": "0.2.0",
+  "description": "Export the currently open Instagram post or reel (visible images + caption) as a local ZIP file or a single embedded Markdown file. No server, no scraping, no automation.",
   "browser_specific_settings": {
     "gecko": {
       "id": "instagram-post-exporter@local.extension",
@@ -12,12 +12,20 @@
       }
     }
   },
+  "permissions": ["downloads", "storage"],
   "host_permissions": [
     "https://www.instagram.com/*",
     "https://instagram.com/*",
     "https://*.cdninstagram.com/*",
     "https://*.fbcdn.net/*"
   ],
+  "background": {
+    "scripts": ["src/background.js"]
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "content_scripts": [
     {
       "matches": [
@@ -29,6 +37,7 @@
         "src/markdown.js",
         "src/instagramExtractor.js",
         "src/download.js",
+        "src/settings.js",
         "src/content.js"
       ],
       "css": ["src/styles.css"],

@@ -1,21 +1,27 @@
 # Instagram Post Exporter (Firefox)
 
-A small, local-only Firefox WebExtension. It adds an **"Export ZIP"** button
+A small, local-only Firefox WebExtension. It adds an **"Export"** button
 next to every post/reel's save (bookmark) icon it can find — on a direct
-post page (`/p/...`, `/reel/...`), *and* on the home feed, a profile grid,
-saved posts, etc., one button per post card as you scroll. Clicking a
-button saves that specific post to your computer as a ZIP file containing:
+post page (`/p/...`, `/reel/...`), where it's always present, *and* on the
+home feed, a profile grid, saved posts, etc., one button per post card as
+you scroll. Clicking a button saves that specific post's URL, shortcode,
+export date, (best-effort) post date, and visible description/caption,
+plus its images, in one of two formats (configurable in the extension's
+**options page**):
 
-```
-instagram-post-<shortcode>.zip
-├── images/
-│   ├── 01.jpg
-│   └── 02.jpg
-└── post.md
-```
-
-`post.md` contains the post URL, shortcode, export date, (best-effort) post
-date, and the visible description/caption.
+- **ZIP** (default) — a `.zip` download containing:
+  ```
+  instagram-post-<shortcode>.zip
+  ├── images/
+  │   ├── 01.jpg
+  │   └── 02.jpg
+  └── post.md
+  ```
+- **Embedded Markdown** — a single `instagram-<post|reel>-<shortcode>.md`
+  file per post, with every carousel image inlined directly inside it as a
+  base64 `data:` URI (no separate image files, no `.zip`), written straight
+  into a subfolder of Firefox's downloads directory that you choose once in
+  the options page.
 
 ## Scope & privacy
 
@@ -35,6 +41,11 @@ date, and the visible description/caption.
   browser session already renders on screen.
 - **Visible content only.** It exports what's currently visible/rendered in
   the active tab, nothing fetched from Instagram's private APIs.
+- **Minimal permissions.** `storage` (remembers your export-mode/subfolder
+  choice) and `downloads` (only used in "Embedded Markdown" mode, to save a
+  file directly — see below) are the only WebExtension permissions
+  requested, alongside `host_permissions` for instagram.com and its two
+  image CDN domains. No `tabs`, no `<all_urls>`, no analytics SDK.
 
 See [docs/technical-notes.md](docs/technical-notes.md) for implementation
 details and known limitations.
@@ -93,18 +104,36 @@ have:
 1. Browse Instagram normally — the home feed, a profile, a direct post
    (`https://www.instagram.com/p/<shortcode>/`) or reel page, saved posts,
    etc.
-2. For every post card the extension recognizes (an image plus a
-   like/comment/share/save icon row), a small pink/purple **"Export ZIP"**
-   button appears just to the left of that post's save/bookmark icon. It
-   follows the post as you scroll and disappears while the post is off
-   screen.
-3. Click it. The button shows "Exporting…" while it fetches that post's
-   visible images, then your browser downloads
-   `instagram-<post|reel>-<shortcode>.zip`.
+2. A small pink/purple **"Export"** button appears next to each post's
+   save/bookmark icon:
+   - On a direct post/reel page, the button for that post is always
+     present — if its icon can't be located or is scrolled out of view, it
+     falls back to a fixed position in the bottom-right corner instead of
+     disappearing.
+   - Everywhere else (feed, profile grid, saved posts…), every post card
+     the extension recognizes (an image plus a like/comment/share/save icon
+     row) gets its own button, anchored next to that post's icon. It
+     follows the post as you scroll and hides while the post is off screen
+     — grid thumbnails and sidebar widgets don't expose enough of an
+     action-icon row to qualify, so they're skipped.
+3. Click a button. It shows "Exporting…" while it fetches that post's
+   visible images, then either downloads a `.zip` or saves a `.md` directly,
+   depending on the export mode set in the options page (gear icon on
+   `about:addons` → this extension → **Options**, or `about:addons` →
+   ⚙ → *Gérer l'extension* → *Préférences*).
 
-Only real post/reel cards get a button — grid thumbnails (e.g. a profile's
-grid view) and sidebar widgets don't expose enough of an action-icon row to
-qualify, so they're skipped.
+## Options page
+
+Open it from `about:addons` (find "Instagram Post Exporter" → the "…" menu
+or gear icon → **Options**/**Préférences**), or via `npm run start` which
+opens Firefox with the extension already loaded. Two settings:
+
+- **Export mode** — `ZIP` (default, unchanged from before) or
+  `Embedded Markdown` (single `.md` per post, images inlined as base64).
+- **Subfolder** — only used in Embedded Markdown mode: the name of a
+  subfolder under Firefox's downloads directory to write directly into
+  (default `InstagramExports`). See "Known limitations" below for why this
+  can't be an arbitrary folder anywhere on disk.
 
 ## Local testing (no real Instagram access needed)
 
@@ -113,7 +142,7 @@ instagram.com:
 
 ```bash
 npm install
-npm test          # runs node:test unit tests against src/zip.js and src/markdown.js
+npm test          # runs node:test unit tests against src/zip.js, markdown.js, instagramExtractor.js, settings.js
 npm run lint       # runs `web-ext lint` against the manifest/extension source
 ```
 
@@ -157,12 +186,21 @@ logged-in session.
 - **Post-card detection:** a card needs both an image and 3+ labeled icons
   to be recognized as an exportable post (filters out grid thumbnails and
   sidebar widgets). A post Instagram renders without that many icons
-  (e.g. a stripped-down layout) won't get a button.
+  (e.g. a stripped-down layout) won't get a button — except the direct
+  post/reel page's own post, which always gets one regardless (see Usage).
+- **No arbitrary folder picker:** Firefox WebExtensions have no API to let
+  the user pick an arbitrary folder anywhere on disk and then write to it
+  silently (the File System Access API's `showDirectoryPicker()` isn't
+  implemented in Firefox, unlike Chromium browsers). "Embedded Markdown"
+  mode's destination is therefore limited to a subfolder *name* under
+  Firefox's own downloads directory (configured in the options page), not a
+  full path — `browser.downloads.download()` is the only way to write a
+  file without a "Save As" dialog popping up on every single export.
 
 ## Future improvements
 
 - Optional video export for reels.
-- A settings/options page (e.g. choose image format, filename pattern).
+- More options: image format/quality for embedded mode, filename pattern.
 - Better carousel handling (export only slides the user has actually viewed,
   with a clear count in `post.md`).
 - Localized UI strings.

@@ -23,6 +23,10 @@
     return String(text || '').split('\n').join('  \n');
   }
 
+  function escapeAltText(alt) {
+    return String(alt || '').replace(/[[\]]/g, '');
+  }
+
   /**
    * @param {Object} data
    * @param {string} data.url - full URL of the post/reel page
@@ -32,6 +36,11 @@
    * @param {string} [data.description] - visible caption/description text
    * @param {number} [data.imageCount] - number of images included in the export
    * @param {string} [data.type] - "post" or "reel"
+   * @param {Array<{alt?: string, dataUrl: string}>} [data.images] - when
+   *   provided (embedded-export mode), each image is inlined directly as a
+   *   Markdown image referencing its data: URI, instead of the default
+   *   "N image(s) exported to the images/ folder" line (ZIP mode, where the
+   *   images are separate files alongside post.md).
    * @returns {string} markdown content for post.md
    */
   function buildPostMarkdown(data) {
@@ -43,6 +52,7 @@
       description = '',
       imageCount = 0,
       type = 'post',
+      images = null,
     } = data || {};
 
     const lines = [];
@@ -69,12 +79,19 @@
     lines.push('');
     lines.push('## Images');
     lines.push('');
-    lines.push(
-      imageCount > 0
-        ? `${imageCount} image(s) exported to the \`images/\` folder.`
-        : '_No images were found/exported for this post._'
-    );
-    lines.push('');
+    if (images && images.length) {
+      images.forEach((img, i) => {
+        const alt = escapeAltText(img.alt) || `image ${i + 1}`;
+        lines.push(`![${alt}](${img.dataUrl})`);
+        lines.push('');
+      });
+    } else if (imageCount > 0) {
+      lines.push(`${imageCount} image(s) exported to the \`images/\` folder.`);
+      lines.push('');
+    } else {
+      lines.push('_No images were found/exported for this post._');
+      lines.push('');
+    }
 
     return lines.join('\n');
   }
