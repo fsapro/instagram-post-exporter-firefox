@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Social Post Exporter — Réglages</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 480px;
+    margin: 24px;
+    color: #1c1c1c;
+  }
+  h2 { margin-top: 0; }
+  fieldset { border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+  legend { font-weight: 600; padding: 0 6px; }
+  label { display: block; margin: 10px 0; line-height: 1.4; }
+  input[type="text"] { width: 100%; padding: 6px 8px; box-sizing: border-box; margin-top: 6px; }
+  button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(45deg, #0a66c2, #004182);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: #003366; }
+  #status { margin-left: 12px; font-size: 13px; color: #2e7d32; }
+  .hint { font-size: 12px; color: #666; margin-top: 6px; }
+  .platform-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 8px;
+  }
+  .platform-tab {
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    font-weight: 600;
+    color: #666;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+  }
+  .platform-tab.active {
+    color: #0a66c2;
+    border-bottom-color: #0a66c2;
+  }
+  .platform-tab:hover:not(.active) {
+    background: #f5f5f5;
+  }
+  .platform-panel { display: none; }
+  .platform-panel.active { display: block; }
+  .platform-panel h3 { margin-top: 0; color: #0a66c2; }
+</style>
+</head>
+<body>
+  <h2>Social Post Exporter — Réglages</h2>
+
+  <div class="platform-tabs">
+    <button class="platform-tab active" data-platform="instagram">📷 Instagram</button>
+    <button class="platform-tab" data-platform="linkedin">💼 LinkedIn</button>
+  </div>
+
+  <!-- Instagram Settings Panel -->
+  <div class="platform-panel active" id="panel-instagram">
+    <h3>Instagram</h3>
+    <fieldset>
+      <legend>Mode d'export</legend>
+      <label>
+        <input type="radio" name="exportMode-instagram" value="zip" />
+        ZIP — <code>images/</code> + <code>post.md</code>, téléchargé comme un fichier .zip (comportement par défaut).
+      </label>
+      <label>
+        <input type="radio" name="exportMode-instagram" value="embedded-md" />
+        Fichier <code>.md</code> unique par post, images du carrousel intégrées en base64 directement dedans — écrit
+        directement dans le sous-dossier ci-dessous, pas de .zip.
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sous-dossier de destination</legend>
+      <label>
+        Nom du sous-dossier (relatif à votre dossier « Téléchargements » Firefox) :
+        <input type="text" id="subfolder-instagram" placeholder="InstagramExports" />
+      </label>
+      <div class="hint">
+        Firefox ne permet pas à une extension d'écrire ailleurs que dans son
+        dossier Téléchargements (ou un sous-dossier de celui-ci) sans ouvrir
+        une boîte de dialogue à chaque fichier — ce champ ne peut donc pas
+        être un chemin arbitraire ailleurs sur le disque. Utilisé uniquement
+        en mode « Fichier .md unique ».
+      </div>
+    </fieldset>
+  </div>
+
+  <!-- LinkedIn Settings Panel -->
+  <div class="platform-panel" id="panel-linkedin">
+    <h3>LinkedIn</h3>
+    <fieldset>
+      <legend>Mode d'export</legend>
+      <label>
+        <input type="radio" name="exportMode-linkedin" value="zip" />
+        ZIP — <code>images/</code> + <code>post.md</code>, téléchargé comme un fichier .zip (comportement par défaut).
+      </label>
+      <label>
+        <input type="radio" name="exportMode-linkedin" value="embedded-md" />
+        Fichier <code>.md</code> unique par post, images du carrousel intégrées en base64 directement dedans — écrit
+        directement dans le sous-dossier ci-dessous, pas de .zip.
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sous-dossier de destination</legend>
+      <label>
+        Nom du sous-dossier (relatif à votre dossier « Téléchargements » Firefox) :
+        <input type="text" id="subfolder-linkedin" placeholder="LinkedInExports" />
+      </label>
+      <div class="hint">
+        Firefox ne permet pas à une extension d'écrire ailleurs que dans son
+        dossier Téléchargements (ou un sous-dossier de celui-ci) sans ouvrir
+        une boîte de dialogue à chaque fichier — ce champ ne peut donc pas
+        être un chemin arbitraire ailleurs sur le disque. Utilisé uniquement
+        en mode « Fichier .md unique ».
+      </div>
+    </fieldset>
+  </div>
+
+  <button id="save" type="button">Enregistrer</button>
+  <span id="status"></span>
+
+  <script src="src/shared/settings.js"></script>
+  <script src="src/options.js"></script>
+</body>
+</html>

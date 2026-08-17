@@ -1,0 +1,55 @@
+/* Floating "Export" button injected on Instagram post/reel cards. */
+
+.ig-exporter-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2147483647;
+
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+
+  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.ig-exporter-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ig-exporter-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ig-exporter-btn:disabled {
+  cursor: default;
+}
+
+.ig-exporter-btn--busy {
+  opacity: 0.75;
+}
+
+.ig-exporter-btn--error {
+  background: #d32f2f;
+}
+
+/* Applied when a save/bookmark icon was found on the page: the button is
+   anchored (via inline top/left set from content.js) just to its left
+   instead of floating in the bottom-right corner, and shrinks to fit
+   comfortably next to the other post action icons. */
+.ig-exporter-btn--anchored {
+  bottom: auto;
+  right: auto;
+  padding: 6px 12px;
+  font-size: 12px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}

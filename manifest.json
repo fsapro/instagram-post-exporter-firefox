@@ -1,0 +1,69 @@
+{
+  "manifest_version": 3,
+  "name": "Social Post Exporter",
+  "version": "0.3.0",
+  "description": "Export Instagram and LinkedIn posts/reels/carousels (visible content + images) as local ZIP or embedded Markdown files. No server, no scraping, no automation.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "social-post-exporter@local.extension",
+      "strict_min_version": "115.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "permissions": ["downloads", "storage"],
+  "host_permissions": [
+    "https://www.instagram.com/*",
+    "https://instagram.com/*",
+    "https://*.cdninstagram.com/*",
+    "https://*.fbcdn.net/*",
+    "https://www.linkedin.com/*",
+    "https://linkedin.com/*",
+    "https://*.licdn.com/*",
+    "https://*.linkedin.com/*"
+  ],
+  "background": {
+    "scripts": ["src/shared/background.js"]
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://instagram.com/*"
+      ],
+      "js": [
+        "src/shared/zip.js",
+        "src/shared/markdown.js",
+        "src/shared/download.js",
+        "src/shared/settings.js",
+        "src/shared/platform.js",
+        "src/platforms/instagram/instagramExtractor.js",
+        "src/content.js"
+      ],
+      "css": ["src/shared/styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://linkedin.com/*"
+      ],
+      "js": [
+        "src/shared/zip.js",
+        "src/shared/markdown.js",
+        "src/shared/download.js",
+        "src/shared/settings.js",
+        "src/shared/platform.js",
+        "src/platforms/linkedin/linkedinExtractor.js",
+        "src/content.js"
+      ],
+      "css": ["src/shared/styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
