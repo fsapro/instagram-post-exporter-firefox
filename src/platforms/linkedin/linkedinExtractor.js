@@ -125,13 +125,33 @@
     return img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-delayed-url') || '';
   }
 
-  /** Heuristic filter to skip avatars/icons and keep actual post content images. */
+  /** Heuristic filter to skip avatars/icons/UI and keep actual post content images. */
   function isLikelyContentImage(img) {
     const alt = (img.getAttribute('alt') || '').toLowerCase();
-    if (alt.includes('profile picture') || alt.includes('photo de profil') ||
-        alt.includes('logo') || alt.includes('avatar') ||
-        alt.includes('company logo') || alt.includes('member photo')) {
-      return false;
+    
+    // Exclude known UI/avatar/reaction images by alt text
+    const excludeAltPatterns = [
+      'profile picture', 'photo de profil', 'photo du profil',
+      'logo', 'avatar', 'company logo', 'member photo',
+      'voir la photo', 'view photo', 'voir photo',
+      'réaction', 'reaction', 'réagir', 'react',
+      'j\'aime', 'like', 'j’aime',
+      'comment', 'commenter',
+      'partager', 'share', 'repost',
+      'envoyer', 'send',
+      'suivre', 'follow',
+      'ignorer', 'skip',
+      'photo de couverture', 'cover photo',
+      'bannière', 'banner',
+      'icône', 'icon',
+      'emoji', 'émoji',
+      'avatar de', 'avatar of',
+    ];
+    
+    for (const pattern of excludeAltPatterns) {
+      if (alt.includes(pattern)) {
+        return false;
+      }
     }
 
     const attrWidth = parseInt(img.getAttribute('width') || '0', 10);
@@ -141,7 +161,7 @@
     const width = naturalWidth || attrWidth;
     const height = naturalHeight || attrHeight;
 
-    // Skip tiny images (avatars, icons)
+    // Skip tiny images (avatars, icons, reaction emojis)
     if (width && height && width < 100 && height < 100) {
       return false;
     }
@@ -150,6 +170,19 @@
     if (width && height) {
       const ratio = width / height;
       if (ratio > 10 || ratio < 0.1) return false;
+    }
+
+    // Skip reaction emoji images (typically small square-ish)
+    if (width && height && width <= 64 && height <= 64 && Math.abs(width - height) < 10) {
+      // Could be reaction emoji - check if parent looks like reaction bar
+      const parent = img.parentElement;
+      if (parent) {
+        const parentText = (parent.textContent || '').toLowerCase();
+        if (parentText.includes('réaction') || parentText.includes('reaction') || 
+            parentText.includes('j\'aime') || parentText.includes('like')) {
+          return false;
+        }
+      }
     }
 
     const hasAnySource =
@@ -192,6 +225,59 @@
     return /^\d+\s*(likes?|vues?|views?|comments?|réactions?|partages?|shares?|j|w|h|m|s|min|sem|semaines?|mois?|ans?)$/i.test(text.trim());
   }
 
+  /** Text patterns that indicate UI chrome to exclude from description */
+  const UI_CHROME_PATTERNS = [
+    /^post du fil d'?actualité$/i,
+    /^fil d'?actualité$/i,
+    /^suivre$/i,
+    /^follow$/i,
+    /^afficher la traduction$/i,
+    /^see translation$/i,
+    /^afficher plus$/i,
+    /^see more$/i,
+    /^afficher moins$/i,
+    /^show less$/i,
+    /^\d+\s*(réactions?|j'?aime|likes?|comment(aires?)?|partages?|shares?)$/i,
+    /^j'?aime$/i,
+    /^commenter$/i,
+    /^comment$/i,
+    /^partager$/i,
+    /^share$/i,
+    /^repost$/i,
+    /^reposter$/i,
+    /^envoyer$/i,
+    /^send$/i,
+    /^signaler$/i,
+    /^report$/i,
+    /^copier le lien/i,
+    /^copy link/i,
+    /^enregistrer$/i,
+    /^save$/i,
+    /^bookmark$/i,
+    /^\d+[hmj]\s*$/i,  // timestamps like "19h", "3j", "2min"
+    /^voir toutes? (les )?réactions?$/i,
+    /^see all reactions?$/i,
+    /^voir toutes? (les )?statistiques?$/i,
+    /^bookmark$/i,
+    /^ignorer$/i,
+    /^skip$/i,
+    /^état du bouton de réaction/i,
+    /^reaction button state/i,
+    /^vues? du profil/i,
+    /^profile views?/i,
+    /^\d+\s*[hmj]$/i,
+    /^[a-zÀ-ÿ]+ [a-zÀ-ÿ]+,?\s*(profil vérifié|verified profile)?\s*(à l'?écoute|open to work)?\s*$/i, // name lines
+    /^(premier|second|third|3e|4e|5e)\s+et\s+\+?$/i, // connection degree
+  ];
+
+  function isUIChrome(text) {
+    const trimmed = text.trim();
+    for (const pattern of UI_CHROME_PATTERNS) {
+      if (pattern.test(trimmed)) return true;
+    }
+    return false;
+  }
+
   const BLOCK_TAGS = new Set(['DIV', 'P', 'LI', 'BR', 'SPAN']);
 
   /**
@@ -220,6 +306,7 @@
     return text
       .split('\n')
       .map((line) => line.trim())
+      .filter((line) => line && !isUIChrome(line))
       .join('\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
@@ -227,35 +314,50 @@
 
   /**
    * Best-effort extraction of the visible post text content.
-   * Falls back through structural heuristics.
+   * Targets the post content container specifically, excludes UI chrome.
    */
   function extractDescription(doc, root) {
     const scope = root || findPostRoot(doc);
 
-    // Try the main text container (feed-shared-text, etc.)
-    const textContainer = scope.querySelector('[data-test-id="post-text"], .feed-shared-text, .update-components-text, .feed-shared-update-v2__description');
-    if (textContainer) {
-      const text = normalizeCaptionText(getTextWithLineBreaks(textContainer));
-      if (text.length > 2) return text;
-    }
+    // Strategy 1: Try the main post text container (most reliable)
+    const textContainerSelectors = [
+      '[data-test-id="post-text"]',
+      '.update-components-text',
+      '.feed-shared-text',
+      '.feed-shared-update-v2__description',
+      '.feed-shared-inline-show-more-text',
+      '[data-test-id="update-components-text"]',
+    ];
 
-    // Try any element with significant text content that looks like a post body
-    const candidates = scope.querySelectorAll('p, span, div');
-    for (const el of candidates) {
-      const text = normalizeCaptionText(getTextWithLineBreaks(el));
-      if (text.length > 50 && !looksLikeStatOrTimestamp(text)) {
-        // Additional check: not just a name/headline
-        if (!/^[A-Z][a-z]+\s+[A-Z][a-z]+$/.test(text.split('\n')[0])) {
-          return text;
-        }
+    for (const selector of textContainerSelectors) {
+      const container = scope.querySelector(selector);
+      if (container) {
+        const text = normalizeCaptionText(getTextWithLineBreaks(container));
+        if (text.length > 10) return text;
       }
     }
 
-    // Fallback to og:description
+    // Strategy 2: For direct post pages, try update-components-actor + text sibling
+    const actorName = scope.querySelector('[data-test-id="actor-name"], .update-components-actor__name, .feed-shared-actor__name');
+    if (actorName) {
+      // Look for text content near the actor
+      const postContent = scope.querySelector('.update-components-text, .feed-shared-text, [data-test-id="post-text"]');
+      if (postContent) {
+        const text = normalizeCaptionText(getTextWithLineBreaks(postContent));
+        if (text.length > 10) return text;
+      }
+    }
+
+    // Strategy 3: Fallback to og:description (usually clean)
     const meta = doc.querySelector('meta[property="og:description"]');
     if (meta && meta.getAttribute('content')) {
-      return meta.getAttribute('content').trim();
+      const content = meta.getAttribute('content').trim();
+      if (content.length > 10) return normalizeCaptionText(content);
     }
+
+    // Strategy 4: As last resort, get all text but heavily filter
+    const allText = normalizeCaptionText(getTextWithLineBreaks(scope));
+    if (allText.length > 50) return allText;
 
     return doc.title ? doc.title.trim() : '';
   }
@@ -273,25 +375,45 @@
 
     // LinkedIn save button typically has aria-label "Save" or "Enregistrer"
     const saveLabels = ['save', 'enregistrer', 'guardar', 'salvar', 'speichern', 'salva'];
-    const icons = Array.from(scope.querySelectorAll('button[aria-label], [role="button"][aria-label]'));
+    
+    // Try multiple selector strategies
+    const candidates = [
+      // By aria-label on button
+      ...Array.from(scope.querySelectorAll('button[aria-label], [role="button"][aria-label]')),
+      // By data-test-id
+      ...Array.from(scope.querySelectorAll('[data-test-id="save-button"], [data-control-name="save_post"], [data-test-id="feed-shared-save-button"]')),
+      // By specific classes
+      ...Array.from(scope.querySelectorAll('button.feed-shared-social-action-bar__action-button, .social-action-button')),
+    ];
 
-    let match = icons.find((btn) => {
+    // First pass: exact save label match
+    for (const btn of candidates) {
       const label = (btn.getAttribute('aria-label') || '').trim().toLowerCase();
-      return saveLabels.some(l => label.includes(l));
-    });
-
-    // Fallback: look for specific data-test-id
-    if (!match) {
-      match = scope.querySelector('[data-test-id="save-button"], [data-control-name="save_post"]');
+      if (saveLabels.some(l => label === l || label.startsWith(l + ' '))) {
+        return btn;
+      }
     }
 
-    // Fallback: last button in the action bar
-    if (!match) {
-      const actionButtons = scope.querySelectorAll('[data-test-id="social-action-button"], button.feed-shared-social-action-bar__action-button');
-      if (actionButtons.length) match = actionButtons[actionButtons.length - 1];
+    // Second pass: partial match
+    for (const btn of candidates) {
+      const label = (btn.getAttribute('aria-label') || '').trim().toLowerCase();
+      if (saveLabels.some(l => label.includes(l))) {
+        return btn;
+      }
     }
 
-    return match;
+    // Third pass: last button in action bar
+    const actionBar = scope.querySelector('[data-test-id="social-action-bar"], .feed-shared-social-action-bar, .update-components-social-bar');
+    if (actionBar) {
+      const buttons = actionBar.querySelectorAll('button, [role="button"]');
+      if (buttons.length) return buttons[buttons.length - 1];
+    }
+
+    // Fallback: last action button in scope
+    const actionButtons = scope.querySelectorAll('[data-test-id="social-action-button"], button[aria-label]');
+    if (actionButtons.length) return actionButtons[actionButtons.length - 1];
+
+    return null;
   }
 
   /**
@@ -300,11 +422,14 @@
    */
   function looksLikePostArticle(article) {
     // Must have some text content
-    if (!article.querySelector('[data-test-id="post-text"], .feed-shared-text, p, span')) return false;
+    if (!article.querySelector('[data-test-id="post-text"], .feed-shared-text, .update-components-text, p, span')) return false;
 
     // Should have at least some action buttons (like, comment, share, save)
     const actionButtons = article.querySelectorAll('[data-test-id="social-action-button"], button[aria-label]');
     if (actionButtons.length < 2) return false;
+
+    // Should have an author/actor
+    if (!article.querySelector('[data-test-id="actor-name"], .feed-shared-actor__name, .update-components-actor__name')) return false;
 
     return true;
   }

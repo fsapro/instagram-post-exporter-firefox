@@ -306,12 +306,29 @@
 
   /** Finds new post cards (anywhere on the page) and gives each one a button. */
   function scanForPosts(extractor) {
-    const candidates = document.querySelectorAll(`article:not([${platformConfig.processedAttr}])`);
-    candidates.forEach((article) => {
-      if (!extractor.looksLikePostArticle(article)) return;
-      article.setAttribute(platformConfig.processedAttr, '1');
-      buttons.set(article, { btn: createButtonFor(article), isPrimary: false });
-    });
+    // Platform-specific selectors for post cards
+    let selectors;
+    if (platform === 'instagram') {
+      selectors = [`article:not([${platformConfig.processedAttr}])`];
+    } else if (platform === 'linkedin') {
+      selectors = [
+        `div[data-test-id="feed-shared-update-v2"]:not([${platformConfig.processedAttr}])`,
+        `.feed-shared-update-v2:not([${platformConfig.processedAttr}])`,
+        `article[data-test-id="feed-shared-update-v2"]:not([${platformConfig.processedAttr}])`,
+        `div[data-test-id="main-feed-activity-card"]:not([${platformConfig.processedAttr}])`,
+      ];
+    } else {
+      selectors = [`article:not([${platformConfig.processedAttr}])`];
+    }
+
+    for (const selector of selectors) {
+      const candidates = document.querySelectorAll(selector);
+      candidates.forEach((article) => {
+        if (!extractor.looksLikePostArticle(article)) return;
+        article.setAttribute(platformConfig.processedAttr, '1');
+        buttons.set(article, { btn: createButtonFor(article), isPrimary: false });
+      });
+    }
   }
 
   /**
