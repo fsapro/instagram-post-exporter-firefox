@@ -1,8 +1,8 @@
 {
-  "name": "instagram-post-exporter-firefox",
-  "version": "0.2.0",
+  "name": "social-post-exporter-firefox",
+  "version": "0.3.0",
   "private": true,
-  "description": "Firefox WebExtension that exports the currently open Instagram post/reel (visible images + caption) as a local ZIP file or a single embedded Markdown file.",
+  "description": "Firefox WebExtension that exports Instagram and LinkedIn posts/reels/carousels (visible content + images) as local ZIP or embedded Markdown files. No server, no scraping, no automation.",
   "scripts": {
     "test": "node --test test/*.test.js",
     "lint": "web-ext lint --ignore-files=test/** --ignore-files=docs/**",

@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Instagram Post Exporter",
-  "version": "0.2.0",
-  "description": "Export the currently open Instagram post or reel (visible images + caption) as a local ZIP file or a single embedded Markdown file. No server, no scraping, no automation.",
+  "name": "Social Post Exporter",
+  "version": "0.3.0",
+  "description": "Export Instagram and LinkedIn posts/reels/carousels (visible content + images) as local ZIP or embedded Markdown files. No server, no scraping, no automation.",
   "browser_specific_settings": {
     "gecko": {
-      "id": "instagram-post-exporter@local.extension",
+      "id": "social-post-exporter@local.extension",
       "strict_min_version": "115.0",
       "data_collection_permissions": {
         "required": ["none"]
@@ -17,10 +17,14 @@
     "https://www.instagram.com/*",
     "https://instagram.com/*",
     "https://*.cdninstagram.com/*",
-    "https://*.fbcdn.net/*"
+    "https://*.fbcdn.net/*",
+    "https://www.linkedin.com/*",
+    "https://linkedin.com/*",
+    "https://*.licdn.com/*",
+    "https://*.linkedin.com/*"
   ],
   "background": {
-    "scripts": ["src/background.js"]
+    "scripts": ["src/shared/background.js"]
   },
   "options_ui": {
     "page": "options.html",
@@ -33,14 +37,32 @@
         "https://instagram.com/*"
       ],
       "js": [
-        "src/zip.js",
-        "src/markdown.js",
-        "src/instagramExtractor.js",
-        "src/download.js",
-        "src/settings.js",
+        "src/shared/zip.js",
+        "src/shared/markdown.js",
+        "src/shared/download.js",
+        "src/shared/settings.js",
+        "src/shared/platform.js",
+        "src/platforms/instagram/instagramExtractor.js",
         "src/content.js"
       ],
-      "css": ["src/styles.css"],
+      "css": ["src/shared/styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://linkedin.com/*"
+      ],
+      "js": [
+        "src/shared/zip.js",
+        "src/shared/markdown.js",
+        "src/shared/download.js",
+        "src/shared/settings.js",
+        "src/shared/platform.js",
+        "src/platforms/linkedin/linkedinExtractor.js",
+        "src/content.js"
+      ],
+      "css": ["src/shared/styles.css"],
       "run_at": "document_idle"
     }
   ]
