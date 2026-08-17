@@ -77,7 +77,11 @@
       identifier = extractor.extractShortcode(url) || 'unknown';
       type = extractor.extractType(url);
     } else if (platform === 'linkedin') {
-      identifier = extractor.extractPostUrn(url) || 'unknown';
+      // For LinkedIn, try to get URN from the article element first
+      identifier = article.getAttribute('data-urn') || article.getAttribute('data-update-urn') || extractor.extractPostUrn(url) || 'unknown';
+      if (identifier.startsWith('urn:li:activity:')) {
+        identifier = identifier.replace('urn:li:activity:', '');
+      }
       type = extractor.extractType(url);
     }
 
@@ -231,19 +235,19 @@
           ? await exportAsEmbeddedMarkdown({ markdown }, images, common, userSettings.subfolder)
           : await exportAsZip({ markdown, zip, download }, images, common);
 
-      // Always shows the image count, not just on partial failure — a low
-      // count can also mean the extraction itself only found that many
-      // images rendered in the DOM at click time (e.g. a carousel hasn't
-      // fully rendered yet), which looks identical to "done" unless
-      // the count is visible right on the button.
-      const resultLabel =
-        result.total === 0
-          ? 'Exported ✓ (no images)'
-          : result.successCount < result.total
-            ? `Exported (${result.successCount}/${result.total} images)`
-            : `Exported ✓ (${result.total} image${result.total > 1 ? 's' : ''})`;
-      setButtonState(btn, 'idle', resultLabel, defaultLabel);
-      setTimeout(() => setButtonState(btn, 'idle', null, defaultLabel), 3000);
+    // Always shows the image count, not just on partial failure — a low
+    // count can also mean the extraction itself only found that many
+    // images rendered in the DOM at click time (e.g. a carousel hasn't
+    // fully rendered yet), which looks identical to "done" unless
+    // the count is visible right on the button.
+    const resultLabel =
+      result.total === 0
+        ? 'Exported ✓ (no images)'
+        : result.successCount < result.total
+          ? `Exported (${result.successCount}/${result.total} images)`
+          : `Exported ✓ (${result.total} image${result.total > 1 ? 's' : ''})`;
+    setButtonState(btn, 'idle', resultLabel, defaultLabel);
+    setTimeout(() => setButtonState(btn, 'idle', null, defaultLabel), 3000);
     } catch (err) {
       console.error(`[${platformConfig.name} Post Exporter] Export failed:`, err);
       setButtonState(btn, 'error', 'Export failed', defaultLabel);
@@ -307,27 +311,47 @@
   /** Finds new post cards (anywhere on the page) and gives each one a button. */
   function scanForPosts(extractor) {
     // Platform-specific selectors for post cards
-    let selectors;
     if (platform === 'instagram') {
-      selectors = [`article:not([${platformConfig.processedAttr}])`];
-    } else if (platform === 'linkedin') {
-      selectors = [
-        `div[data-test-id="feed-shared-update-v2"]:not([${platformConfig.processedAttr}])`,
-        `.feed-shared-update-v2:not([${platformConfig.processedAttr}])`,
-        `article[data-test-id="feed-shared-update-v2"]:not([${platformConfig.processedAttr}])`,
-        `div[data-test-id="main-feed-activity-card"]:not([${platformConfig.processedAttr}])`,
-      ];
-    } else {
-      selectors = [`article:not([${platformConfig.processedAttr}])`];
-    }
-
-    for (const selector of selectors) {
-      const candidates = document.querySelectorAll(selector);
+      // Instagram: simple article-based scanning
+      const candidates = document.querySelectorAll(`article:not([${platformConfig.processedAttr}])`);
       candidates.forEach((article) => {
         if (!extractor.looksLikePostArticle(article)) return;
         article.setAttribute(platformConfig.processedAttr, '1');
         buttons.set(article, { btn: createButtonFor(article), isPrimary: false });
       });
+    } else if (platform === 'linkedin') {
+      // LinkedIn: use the new findFeedPosts method for SDUI feed
+      if (typeof extractor.findFeedPosts === 'function') {
+        const feedPosts = extractor.findFeedPosts(document);
+        for (const post of feedPosts) {
+          const { element: article, urn } = post;
+          if (!article) continue;
+          if (article.hasAttribute(platformConfig.processedAttr)) continue;
+          if (!extractor.looksLikePostArticle(article)) continue;
+          
+          article.setAttribute(platformConfig.processedAttr, '1');
+          // Store URN on the element for later use
+          article.setAttribute('data-urn', `urn:li:activity:${urn}`);
+          buttons.set(article, { btn: createButtonFor(article), isPrimary: false });
+        }
+      } else {
+        // Fallback to CSS selectors if findFeedPosts not available
+        const selectors = [
+          `div[data-test-id="feed-shared-update-v2"]:not([${platformConfig.processedAttr}])`,
+          `.feed-shared-update-v2:not([${platformConfig.processedAttr}])`,
+          `article[data-test-id="feed-shared-update-v2"]:not([${platformConfig.processedAttr}])`,
+          `div[data-test-id="main-feed-activity-card"]:not([${platformConfig.processedAttr}])`,
+        ];
+
+        for (const selector of selectors) {
+          const candidates = document.querySelectorAll(selector);
+          candidates.forEach((article) => {
+            if (!extractor.looksLikePostArticle(article)) return;
+            article.setAttribute(platformConfig.processedAttr, '1');
+            buttons.set(article, { btn: createButtonFor(article), isPrimary: false });
+          });
+        }
+      }
     }
   }
 
